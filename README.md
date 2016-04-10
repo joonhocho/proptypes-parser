@@ -17,9 +17,12 @@ npm install --save proptypes-parser
 import createPropTypesParser from 'proptypes-parser';
 import {PropTypes} from 'react';
 
-class Message {}
 
-const parsePropTypes = createPropTypesParser(PropTypes, {Message});
+// Provide PropTypes to the parser (Required).
+// Also, provide custom type definitions (Optional).
+const parsePropTypes = createPropTypesParser(PropTypes, {
+  Message: class Message {} // To use 'Message' type is PropTypes. 
+});
 
 const propTypes = parsePropTypes(`{
   number: Number
