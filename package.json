@@ -1,0 +1,38 @@
+{
+  "name": "easy-proptypes",
+  "version": "0.0.1",
+  "description": "Easy GraphQL like way to define PropTypes for React components",
+  "main": "lib/index.js",
+  "scripts": {
+    "babel": "babel src --out-dir lib",
+    "babel-watch": "babel src --watch --out-dir lib",
+    "start": "npm run babel && npm run test",
+    "test": "mocha lib/test/**/*.js",
+    "test-watch": "mocha --watch lib/test/**/*.js",
+    "watch": "npm run babel-watch & npm run test-watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joonhocho/react-graphql-proptypes.git"
+  },
+  "keywords": [
+    "react",
+    "proptypes",
+    "graphql",
+    "schema",
+    "easy"
+  ],
+  "author": "Joon Ho Cho",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/joonhocho/react-graphql-proptypes/issues"
+  },
+  "homepage": "https://github.com/joonhocho/react-graphql-proptypes#readme",
+  "devDependencies": {
+    "babel-cli": "^6.7.5",
+    "babel-preset-es2015": "^6.6.0",
+    "babel-preset-stage-0": "^6.5.0",
+    "mocha": "^2.4.5",
+    "react": "^15.0.1"
+  }
+}
