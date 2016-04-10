@@ -41,8 +41,7 @@ const propTypes = parsePropTypes(`{
   any: Any!
 }`);
 ```
-
-Above is equivalent to:
+is equivalent to
 ```javascript
 const propTypes = {
   number: PropTypes.number,
