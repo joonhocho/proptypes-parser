@@ -1,7 +1,7 @@
 {
   "name": "proptypes-parser",
-  "version": "0.0.2",
-  "description": "Easy GraphQL like way to define PropTypes for React components",
+  "version": "0.0.3",
+  "description": "PropTypes parser / generator for React components with GraphQL-like syntax.",
   "main": "lib/index.js",
   "scripts": {
     "babel": "babel src --out-dir lib",
