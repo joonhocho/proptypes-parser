@@ -1,6 +1,6 @@
 {
   "name": "proptypes-parser",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Easy GraphQL like way to define PropTypes for React components",
   "main": "lib/index.js",
   "scripts": {

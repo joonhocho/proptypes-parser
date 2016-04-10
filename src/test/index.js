@@ -23,9 +23,7 @@ describe('PropTypes', () => {
   it('should successfully parse and return valid propTypes.', () => {
     class Message {}
 
-    const propTypes = createPropTypes(PropTypes, {
-      Message,
-    })(`{
+    const propTypes = createPropTypes(PropTypes, {Message})(`{
       number: Number
       string: String!
       boolean: Boolean
@@ -111,5 +109,76 @@ describe('PropTypes', () => {
     testFail(propTypes.message, new Date());
 
     assert.equal(propTypes.any, PropTypes.any.isRequired);
+  });
+
+
+  it('should allow local type overrides.', () => {
+    class Message {}
+
+    const parsePropTypes = createPropTypes(PropTypes, {Message});
+
+    class LocalDate {}
+    class LocalElement {}
+    class LocalMessage {}
+
+    const propTypes = parsePropTypes(`{
+      date: Date
+      element: Element
+      message: Message
+    }`, {
+      Date: LocalDate,
+      Element: LocalElement,
+      Message: LocalMessage,
+    });
+
+    testPass(propTypes.date, new LocalDate());
+    testFail(propTypes.date, new Date());
+
+    testPass(propTypes.element, new LocalElement());
+    assert.notEqual(propTypes.element, PropTypes.element);
+
+    testFail(propTypes.message, new Message());
+    testPass(propTypes.message, new LocalMessage());
+  });
+
+
+  it('should allow manually adding PropTypes.', () => {
+    class Message {}
+
+    const propTypes = createPropTypes(PropTypes, {
+      OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
+      OptionalUnion: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number,
+        PropTypes.instanceOf(Message),
+      ]),
+    })(`{
+      optionalEnumValue: OptionalEnum
+      requiredEnumValue: OptionalEnum!
+      unionValue: OptionalUnion
+      arrayUnionValue: [OptionalUnion!]!
+    }`);
+
+    testPass(propTypes.optionalEnumValue, 'News');
+    testPass(propTypes.optionalEnumValue, 'Photos');
+    testPass(propTypes.optionalEnumValue, null);
+    testFail(propTypes.optionalEnumValue, 'Others');
+
+    testPass(propTypes.requiredEnumValue, 'News');
+    testPass(propTypes.requiredEnumValue, 'Photos');
+    testFail(propTypes.requiredEnumValue, null);
+    testFail(propTypes.requiredEnumValue, 'Others');
+
+    testPass(propTypes.unionValue, '1');
+    testPass(propTypes.unionValue, 1);
+    testPass(propTypes.unionValue, new Message());
+    testPass(propTypes.unionValue, null);
+    testFail(propTypes.unionValue, true);
+
+    testPass(propTypes.arrayUnionValue, ['1']);
+    testPass(propTypes.arrayUnionValue, [1]);
+    testPass(propTypes.arrayUnionValue, [new Message()]);
+    testPass(propTypes.arrayUnionValue, []);
+    testFail(propTypes.arrayUnionValue, [null]);
   });
 });

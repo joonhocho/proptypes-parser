@@ -1,21 +1,3 @@
-/*
-export const propTypes = {
-  profile: PropTypes.shape({
-    profileInfo: PropTypes.shape({
-      name: PropTypes.shape({
-        name: PropTypes.string.isRequired,
-      }),
-      picture: PropTypes.shape({
-        path: PropTypes.string.isRequired,
-      }),
-      company: PropTypes.shape({
-        name: PropTypes.string.isRequired,
-      }),
-    }).isRequired,
-  }).isRequired,
-};
-*/
-
 const STATE_NEED_NAME = 'need_name';
 const STATE_NEED_NAME_COLON = 'need_name_colon';
 const STATE_NEED_TYPE = 'need_type';
@@ -37,19 +19,10 @@ const isValidName = (name) => nameRegexp.test(name);
 
 const last = (list) => list[list.length - 1];
 
-const createContext = (overrides = {}) => ({
-  scope: {},
-  state: STATE_NEED_NAME,
-  name: null,
-  type: null,
-  openingChar: null,
-  ...overrides,
-});
-
 const getInnerTokens = (tokens, opening, closing, start = 0) => {
   let level = 0;
   for (let i = start; i < tokens.length; i++) {
-    let token = tokens[i];
+    const token = tokens[i];
     if (token === opening) {
       level++;
     } else if (token === closing) {
@@ -81,18 +54,25 @@ export default (PropTypes, extension) => {
     RegExp: PropTypes.instanceOf(RegExp),
   };
 
-  if (extension) {
-    Object.keys(extension).forEach((name) => {
-      const type = extension[name];
-      if (typeof type === 'function') {
-        types[name] = PropTypes.instanceOf(type);
+  const addTypes = (dest, typeOverrides) => {
+    Object.keys(typeOverrides).forEach((name) => {
+      const type = typeOverrides[name];
+      if (typeof type === 'function' && type.prototype) {
+        dest[name] = PropTypes.instanceOf(type);
       } else {
-        types[name] = type;
+        dest[name] = type;
       }
     });
+  };
+
+  if (extension) {
+    addTypes(types, extension);
   }
 
+  let tmpTypes = {};
+
   const getType = (name) => {
+    if (tmpTypes[name]) return tmpTypes[name];
     if (types[name]) return types[name];
     throw new Error(`Expected valid named type. Instead, saw '${name}'.`);
   };
@@ -240,11 +220,14 @@ export default (PropTypes, extension) => {
   };
 
 
-  return (string) => {
+  return (string, typeOverrides) => {
     const tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
     if (tokens[0] !== CHAR_SHAPE_OPEN || last(tokens) !== CHAR_SHAPE_CLOSE) {
       throw new Error('Must start with wrap definition with { }.');
     }
+
+    tmpTypes = {};
+    if (typeOverrides) addTypes(tmpTypes, typeOverrides);
 
     return parseShape(tokens.slice(1, tokens.length - 1));
   };
