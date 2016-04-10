@@ -1,5 +1,5 @@
 {
-  "name": "easy-proptypes",
+  "name": "parse-proptypes",
   "version": "0.0.1",
   "description": "Easy GraphQL like way to define PropTypes for React components",
   "main": "lib/index.js",
@@ -20,7 +20,8 @@
     "proptypes",
     "graphql",
     "schema",
-    "easy"
+    "parse",
+    "parser"
   ],
   "author": "Joon Ho Cho",
   "license": "MIT",
