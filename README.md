@@ -6,13 +6,13 @@ It uses GraphQL schema like syntax to define PropTypes in string.
 
 ### Install
 ```
-npm install --save parse-proptypes
+npm install --save proptypes-parser
 ```
 
 
 ### Usage
 ```
-import createPropTypesParser from 'parse-proptypes';
+import createPropTypesParser from 'proptypes-parser';
 import {PropTypes} from 'react';
 
 const parsePropTypes = createPropTypesParser(PropTypes);
