@@ -13,7 +13,7 @@ npm install --save proptypes-parser
 
 
 ### Usage
-```
+```javascript
 import createPropTypesParser from 'proptypes-parser';
 import {PropTypes} from 'react';
 
@@ -43,7 +43,7 @@ const propTypes = parsePropTypes(`{
 ```
 
 Above is equivalent to:
-```
+```javascript
 const propTypes = {
   number: PropTypes.number,
   string: PropTypes.string.isRequired,
@@ -76,7 +76,7 @@ How wonderful!
 ### Union and Enums
 Currently, Union and Enums are not supported.
 However, you can do this instead:
-```
+```javascript
 // Provide type extensions for this parser.
 const parsePropTypes = createPropTypesParser(PropTypes, {
   OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
@@ -95,7 +95,7 @@ const propTypes = parsePropTypes(`{
 }`);
 ```
 or
-```
+```javascript
 // Provide local one-time type extensions.
 const propTypes = parsePropTypes(`{
   optionalEnumValue: OptionalEnum
