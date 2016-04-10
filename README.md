@@ -123,6 +123,9 @@ See [test](https://github.com/joonhocho/proptypes-parser/blob/master/src/test/in
 ### TODO
  - Support Union: `value: (Number | String)!`
  - Support Enums: `value: ['News', 'Photos']`
+ - More extensive validations
+ - Babel plugin
+ - Webpack plugin
  - PRs are welcome!
 
 
