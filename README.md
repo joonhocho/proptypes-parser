@@ -3,10 +3,12 @@ Don't you just hate writing PropTypes for React components?
 `proptypes-parser` is cleaner, easier and less error prone way to define your PropTypes for both React and React Native applications.
 It uses GraphQL schema like syntax to define PropTypes in string.
 
+
 ### Install
 ```
 npm install --save parse-proptypes
 ```
+
 
 ### Usage
 ```
@@ -66,6 +68,54 @@ const propTypes = {
   any: PropTypes.any.isRequired,
 };
 ```
+How wonderful!
+
+
+### Union and Enums
+Currently, Union and Enums are not supported.
+However, you can do this instead:
+```
+// Provide type extensions for this parser.
+const parsePropTypes = createPropTypesParser(PropTypes, {
+  OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
+  OptionalUnion: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+    PropTypes.instanceOf(Message),
+  ]),
+});
+
+const propTypes = parsePropTypes(`{
+  optionalEnumValue: OptionalEnum
+  requiredEnumValue: OptionalEnum!
+  unionValue: OptionalUnion
+  arrayUnionValue: [OptionalUnion!]!
+}`);
+```
+or
+```
+// Provide local one-time type extensions.
+const propTypes = parsePropTypes(`{
+  optionalEnumValue: OptionalEnum
+  requiredEnumValue: OptionalEnum!
+  unionValue: OptionalUnion
+  arrayUnionValue: [OptionalUnion!]!
+}`, {
+  OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
+  OptionalUnion: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+    PropTypes.instanceOf(Message),
+  ]),
+});
+```
+
+
+### TODO
+ - Support Union: `value: (Number | String)!`
+ - Support Enums: `value: ['News', 'Photos']`
+ - PRs are welcome!
+
 
 ### License
 ```
