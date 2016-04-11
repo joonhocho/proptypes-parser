@@ -17,16 +17,21 @@ npm install --save proptypes-parser
 
 
 ### Usage
+in `proptypes.js`.
 ```javascript
 import createPropTypesParser from 'proptypes-parser';
 import {PropTypes} from 'react';
 
-
 // Provide PropTypes to the parser (Required).
-// Also, provide custom type definitions (Optional).
-const parsePropTypes = createPropTypesParser(PropTypes, {
-  Message: class Message {} // To use 'Message' type is PropTypes. 
+// Also, provide any custom type definitions (Optional).
+export default createPropTypesParser(PropTypes, {
+  Message: class Message {} // To use 'Message' instance type. 
 });
+```
+
+in `component.js`.
+```javascript
+import parsePropTypes from './proptypes';
 
 const propTypes = parsePropTypes(`{
   number: Number
@@ -50,6 +55,7 @@ const propTypes = parsePropTypes(`{
   any: Any!
 }`);
 ```
+
 is equivalent to
 ```javascript
 const propTypes = {
@@ -85,10 +91,8 @@ How wonderful!
 You can easily compose your types with named definitions and spread operator `...`.
 
 ```javascript
-const parser = createPropTypesParser(React.PropTypes);
-
 // Define 'Car' type.
-const carPropTypes = parser(`
+const carPropTypes = parsePropTypes(`
   Car {
     year: Number!
     model: String!
@@ -96,7 +100,7 @@ const carPropTypes = parser(`
 `);
 
 // Use previously defined 'Car' type.
-const garagePropTypes = parser(`
+const garagePropTypes = parsePropTypes(`
   Garage {
     address: String!
     cars: [Car!]!
@@ -104,7 +108,7 @@ const garagePropTypes = parser(`
 `);
 
 // Use spread operator on 'Car' type.
-const carWithMakePropTypes = parser(`
+const carWithMakePropTypes = parsePropTypes(`
   CarWithMake {
     ...Car
     make: String!
