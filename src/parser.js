@@ -223,7 +223,7 @@ export default (PropTypes, extension) => {
   return (string, typeOverrides) => {
     const tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
     if (tokens[0] !== CHAR_SHAPE_OPEN || last(tokens) !== CHAR_SHAPE_CLOSE) {
-      throw new Error('Must start with wrap definition with { }.');
+      throw new Error('Must wrap definition with { }.');
     }
 
     tmpTypes = {};
