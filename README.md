@@ -87,7 +87,7 @@ You can easily compose your types with named definitions.
 ```javascript
 const parser = createPropTypesParser(React.PropTypes);
 
-// Define Car Type.
+// Define 'Car' type.
 const carPropTypes = parser(`
   Car {
     year: Number!
@@ -95,7 +95,7 @@ const carPropTypes = parser(`
   }
 `);
 
-// Use previously defined Car Type.
+// Use previously defined 'Car' type.
 const garagePropTypes = parser(`
   Garage {
     address: String!
