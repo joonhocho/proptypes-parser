@@ -55,19 +55,20 @@ export default (PropTypes, extension) => {
     RegExp: PropTypes.instanceOf(RegExp),
   };
 
+  const maybeConvertClassToType = (type) => {
+    if (typeof type === 'function' && type.prototype) {
+      return PropTypes.instanceOf(type);
+    }
+    return type;
+  };
+
   const addTypes = (dest, typeOverrides) => {
     forEach(typeOverrides, (type, name) => {
-      if (typeof type === 'function' && type.prototype) {
-        dest[name] = PropTypes.instanceOf(type);
-      } else {
-        dest[name] = type;
-      }
+      dest[name] = maybeConvertClassToType(type);
     });
   };
 
-  if (extension) {
-    addTypes(types, extension);
-  }
+  if (extension) addTypes(types, extension);
 
   let tmpTypes = {};
 
@@ -128,9 +129,7 @@ export default (PropTypes, extension) => {
 
 
   const parseShape = (tokens) => {
-    if (!tokens.length) {
-      throw new Error('Empty shape.');
-    }
+    if (!tokens.length) throw new Error('Empty shape.');
 
     const shape = {};
 
@@ -232,6 +231,14 @@ export default (PropTypes, extension) => {
 
   const namedPropTypes = {};
 
+  const addPropTypes = (name, propTypes) => {
+    if (types[name]) {
+      throw new Error(`'${name}' type is already defined.`);
+    }
+    namedPropTypes[name] = propTypes;
+    types[name] = PropTypes.shape(propTypes);
+  };
+
   const parser = (string, typeOverrides) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
 
@@ -252,19 +259,27 @@ export default (PropTypes, extension) => {
       throw new Error(`'${name}' type is already defined.`);
     }
 
-    const shape = parseShape(tokens.slice(1, tokens.length - 1));
+    const propTypes = parseShape(tokens.slice(1, tokens.length - 1));
 
-    if (name) {
-      namedPropTypes[name] = shape;
-      types[name] = PropTypes.shape(shape);
-    }
+    if (name) addPropTypes(name, propTypes);
 
-    return shape;
+    return propTypes;
   };
+
+  parser.getType = (name) => types[name] || null;
 
   parser.getPropTypes = (name) => namedPropTypes[name] || null;
 
-  parser.getType = (name) => types[name] || null;
+  parser.addType = (name, type) => {
+    if (types[name]) {
+      throw new Error(`'${name}' type is already defined.`);
+    }
+    if (type.constructor === Object) {
+      addPropTypes(name, type);
+    } else {
+      types[name] = maybeConvertClassToType(type);
+    }
+  };
 
   return parser;
 };

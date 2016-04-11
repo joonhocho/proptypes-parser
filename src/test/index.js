@@ -296,4 +296,72 @@ describe('PropTypes', () => {
     // Additional field
     assert.equal(carWithMakePropTypes.make, PropTypes.string.isRequired);
   });
+
+
+  it('should allow adding types.', () => {
+    const parser = createParser(PropTypes);
+
+    class Message {}
+
+    assert.throws(() => {
+      parser(`{ message: Message }`);
+    }, /Message/i);
+
+    parser.addType('Message', Message);
+
+    const propTypes = parser(`{ message: Message }`);
+
+    testPass(propTypes.message, new Message());
+    testPass(propTypes.message, null);
+    testFail(propTypes.message, Message);
+    testFail(propTypes.message, {});
+  });
+
+
+  it('should allow adding propTypes.', () => {
+    const parser = createParser(PropTypes);
+
+    assert.throws(() => {
+      parser(`{ message: Message }`);
+    }, /Message/i);
+
+    const messagePropTypes = parser(`{
+      from: String!
+      to: String!
+      text: String!
+    }`);
+
+    parser.addType('Message', messagePropTypes);
+
+    const propTypes = parser(`{ message: Message }`);
+
+    testPass(propTypes.message, {
+      from: 'me',
+      to: 'you',
+      text: 'hi',
+    });
+
+    testFail(propTypes.message, {
+      from: 'me',
+      text: 'hi',
+    });
+
+    const messagePropTypesWithDate = parser(`{
+      ...Message
+      date: Date!
+    }`);
+
+    assert.equal(messagePropTypesWithDate.text, PropTypes.string.isRequired);
+    testPass(messagePropTypesWithDate.date, new Date());
+    testFail(messagePropTypesWithDate.date, null);
+
+    parser.addType('NewsOrPhotos', PropTypes.oneOf(['News', 'Photos']));
+    const propTypesWithEnum = parser(`{
+      mediaType: NewsOrPhotos
+    }`);
+    testPass(propTypesWithEnum.mediaType, undefined);
+    testPass(propTypesWithEnum.mediaType, 'News');
+    testPass(propTypesWithEnum.mediaType, 'Photos');
+    testFail(propTypesWithEnum.mediaType, 'Video');
+  });
 });
