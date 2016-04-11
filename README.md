@@ -122,7 +122,7 @@ See [test](https://github.com/joonhocho/proptypes-parser/blob/master/src/test/in
 
 ### Production Use
 Currently, module returns a no-op function for production (`process.env.NODE_ENV === 'production'`).
-In the future, it will be nice to do more interesting things based on babel and webpack plugins (PR is welcome!).
+In the future, it will be nice to do more interesting things with babel and webpack via plugins (PR is welcome!).
 
 Take a look at the [source code](https://github.com/joonhocho/proptypes-parser/blob/master/src/index.js).
 
