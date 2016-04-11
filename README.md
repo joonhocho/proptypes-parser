@@ -82,7 +82,7 @@ How wonderful!
 
 
 ### Composition
-You can easily compose your types with named definitions.
+You can easily compose your types with named definitions and spread operator `...`.
 
 ```javascript
 const parser = createPropTypesParser(React.PropTypes);
