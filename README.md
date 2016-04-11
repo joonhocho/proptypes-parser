@@ -2,8 +2,12 @@
 PropTypes parser / generator for React and React Native components with GraphQL-like syntax.
 
 Don't you just hate writing PropTypes for React components?
+
 `proptypes-parser` is cleaner, easier and less error prone way to define your PropTypes for both React and React Native applications.
+
 It uses GraphQL schema like syntax to define PropTypes in string.
+
+It also allows Type Composition via named definitions!
 
 
 ### Install
