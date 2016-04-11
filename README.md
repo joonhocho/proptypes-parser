@@ -7,7 +7,7 @@ Don't you just hate writing PropTypes for React components?
 
 It uses GraphQL schema like syntax to define PropTypes in string.
 
-It also allows Type Composition via named definitions!
+It also allows Type Composition via named definitions and spread operator `...`!
 
 
 ### Install
@@ -100,6 +100,14 @@ const garagePropTypes = parser(`
   Garage {
     address: String!
     cars: [Car!]!
+  }
+`);
+
+// Use spread operator on 'Car' type.
+const carWithMakePropTypes = parser(`
+  CarWithMake {
+    ...Car
+    make: String!
   }
 `);
 ```
