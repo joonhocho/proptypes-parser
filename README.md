@@ -77,7 +77,7 @@ const propTypes = {
 How wonderful!
 
 
-### Compositon
+### Composition
 You can easily compose your types with named definitions.
 
 ```javascript
