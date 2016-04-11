@@ -77,6 +77,30 @@ const propTypes = {
 How wonderful!
 
 
+### Compositon
+You can easily compose your types with named definitions.
+
+```javascript
+const parser = createPropTypesParser(React.PropTypes);
+
+// Define Car Type.
+const carPropTypes = parser(`
+  Car {
+    year: Number!
+    model: String!
+  }
+`);
+
+// Use previously defined Car Type.
+const garagePropTypes = parser(`
+  Garage {
+    address: String!
+    cars: [Car!]!
+  }
+`);
+```
+
+
 ### Union and Enums
 Currently, Union and Enums are not supported.
 However, you can do this instead:
