@@ -119,11 +119,11 @@ const carWithMakePropTypes = parsePropTypes(`
 ### addType(name, type)
 Add new types to the type dictionary.
 ```javascript
-// You can add class instance type.
+// Add class instance type.
 class Message {}
 parsePropTypes.addType('Message', Message);
 
-// You can add propTypes definition type.
+// Add propTypes definition.
 // Same as named definition.
 const carPropTypes = parsePropTypes(`{
   year: Number!
@@ -131,7 +131,7 @@ const carPropTypes = parsePropTypes(`{
 }`);
 parsePropTypes.addType('Car', carPropTypes);
 
-// You can add PropTypes type.
+// Add React.PropTypes type.
 const newsOrPhotosEnum = PropTypes.oneOf(['News', 'Photos']);
 parsePropTypes.addType('NewsOrPhotos', newsOrPhotosEnum);
 
