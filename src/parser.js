@@ -121,7 +121,7 @@ export default (PropTypes, extension) => {
     }
 
     if (isRequired && !type.isRequired) {
-      throw new Error(`Type does support isRequired. ${tokens}`);
+      throw new Error(`Type does not support isRequired. ${tokens}`);
     }
     return isRequired ? type.isRequired : type;
   };
