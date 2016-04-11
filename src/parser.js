@@ -219,9 +219,17 @@ export default (PropTypes, extension) => {
     return shape;
   };
 
+  const namedPropTypes = {};
 
-  return (string, typeOverrides) => {
-    const tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
+  const parser = (string, typeOverrides) => {
+    let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
+
+    let name;
+    if (isValidName(tokens[0])) {
+      name = tokens[0];
+      tokens = tokens.slice(1);
+    }
+
     if (tokens[0] !== CHAR_SHAPE_OPEN || last(tokens) !== CHAR_SHAPE_CLOSE) {
       throw new Error('Must wrap definition with { }.');
     }
@@ -229,6 +237,23 @@ export default (PropTypes, extension) => {
     tmpTypes = {};
     if (typeOverrides) addTypes(tmpTypes, typeOverrides);
 
-    return parseShape(tokens.slice(1, tokens.length - 1));
+    if (types[name] || tmpTypes[name]) {
+      throw new Error(`'${name}' type is already defined.`);
+    }
+
+    const shape = parseShape(tokens.slice(1, tokens.length - 1));
+
+    if (name) {
+      namedPropTypes[name] = shape;
+      types[name] = PropTypes.shape(shape);
+    }
+
+    return shape;
   };
+
+  parser.getPropTypes = (name) => namedPropTypes[name] || null;
+
+  parser.getType = (name) => types[name] || null;
+
+  return parser;
 };

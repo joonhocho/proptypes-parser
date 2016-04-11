@@ -1,4 +1,4 @@
-import createPropTypes from '../index';
+import createParser from '../index';
 import {PropTypes} from 'react';
 
 const assert = require('assert');
@@ -23,7 +23,7 @@ describe('PropTypes', () => {
   it('should successfully parse and return valid propTypes.', () => {
     class Message {}
 
-    const propTypes = createPropTypes(PropTypes, {Message})(`{
+    const propTypes = createParser(PropTypes, {Message})(`{
       number: Number
       string: String!
       boolean: Boolean
@@ -115,7 +115,7 @@ describe('PropTypes', () => {
   it('should allow local type overrides.', () => {
     class Message {}
 
-    const parsePropTypes = createPropTypes(PropTypes, {Message});
+    const parsePropTypes = createParser(PropTypes, {Message});
 
     class LocalDate {}
     class LocalElement {}
@@ -145,7 +145,7 @@ describe('PropTypes', () => {
   it('should allow manually adding PropTypes.', () => {
     class Message {}
 
-    const propTypes = createPropTypes(PropTypes, {
+    const propTypes = createParser(PropTypes, {
       OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
       OptionalUnion: PropTypes.oneOfType([
         PropTypes.string,
@@ -180,5 +180,81 @@ describe('PropTypes', () => {
     testPass(propTypes.arrayUnionValue, [new Message()]);
     testPass(propTypes.arrayUnionValue, []);
     testFail(propTypes.arrayUnionValue, [null]);
+  });
+
+
+  it('should accept named PropTypes definition.', () => {
+    const parser = createParser(PropTypes);
+
+    const propTypes = parser(`
+      Car {
+        year: Number!
+        model: String!
+      }
+    `);
+
+    assert.equal(propTypes, parser.getPropTypes('Car'));
+
+    assert.equal(propTypes.year, PropTypes.number.isRequired);
+    assert.equal(propTypes.model, PropTypes.string.isRequired);
+  });
+
+
+  it('should not allow name collisions.', () => {
+    const parser = createParser(PropTypes);
+
+    assert.throws(() => {
+      // Cannot override default type, String.
+      const propTypes = parser(`
+        String {
+          year: Number!
+          model: String!
+        }
+      `);
+    }, /already defined/i);
+
+    const propTypes = parser(`
+      Car {
+        year: Number!
+        model: String!
+      }
+    `);
+
+    assert.throws(() => {
+      // Cannot override previously defined, Car.
+      const propTypes = parser(`
+        Car {
+          year: Number!
+          model: String!
+          wheelCount: Number!
+        }
+      `);
+    }, /already defined/i);
+  });
+
+
+  it('should allow composition with named PropTypes definitions.', () => {
+    const parser = createParser(PropTypes);
+
+    const carPropTypes = parser(`
+      Car {
+        year: Number!
+        model: String!
+      }
+    `);
+
+    const garagePropTypes = parser(`
+      Garage {
+        address: String!
+        cars: [Car!]!
+      }
+    `);
+
+    testPass(garagePropTypes.cars, [{year: 2014, model: 'Model 3'}]);
+    testPass(garagePropTypes.cars, [{year: 2014, model: 'Model 3', make: 'Tesla'}]);
+    testPass(garagePropTypes.cars, []);
+    testFail(garagePropTypes.cars, [{model: 'Model 3'}]);
+    testFail(garagePropTypes.cars, [null]);
+    testFail(garagePropTypes.cars, null);
   });
 });
