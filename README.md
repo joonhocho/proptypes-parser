@@ -87,8 +87,8 @@ const propTypes = {
 How wonderful!
 
 
-### Composition
-You can easily compose your types with named definitions and spread operator `...`.
+### Composition via named definition
+Compose types with named definitions and spread operator `...`.
 
 ```javascript
 // Define 'Car' type.
@@ -116,6 +116,33 @@ const carWithMakePropTypes = parsePropTypes(`
 `);
 ```
 
+### addType(name, type)
+Add new types to the type dictionary.
+```javascript
+// You can add class instance type.
+class Message {}
+parsePropTypes.addType('Message', Message);
+
+// You can add propTypes definition type.
+// Same as named definition.
+const carPropTypes = parsePropTypes(`{
+  year: Number!
+  model: String!
+}`);
+parsePropTypes.addType('Car', carPropTypes);
+
+// You can add PropTypes type.
+const newsOrPhotosEnum = PropTypes.oneOf(['News', 'Photos']);
+parsePropTypes.addType('NewsOrPhotos', newsOrPhotosEnum);
+
+// Use above types.
+parsePropTypes(`{
+  message: Message
+  car: Car
+  mediaType: NewsOrPhotos
+}`);
+
+```
 
 ### Union and Enums
 Currently, Union and Enums are not supported.
