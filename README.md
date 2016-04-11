@@ -120,6 +120,13 @@ const propTypes = parsePropTypes(`{
 See [test](https://github.com/joonhocho/proptypes-parser/blob/master/src/test/index.js).
 
 
+### Production Use
+Currently, module returns a no-op function for production (`process.env.NODE_ENV === 'production'`).
+In the future, it will be nice to do more interesting things based on babel and webpack plugins (PR is welcome!).
+
+Take a look at the [source code](https://github.com/joonhocho/proptypes-parser/blob/master/src/index.js).
+
+
 ### TODO
  - Support Union: `value: (Number | String)!`
  - Support Enums: `value: ['News', 'Photos']`
