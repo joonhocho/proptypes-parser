@@ -9,15 +9,16 @@ const CHAR_LIST_OPEN = '[';
 const CHAR_LIST_CLOSE = ']';
 const CHAR_SHAPE_OPEN = '{';
 const CHAR_SHAPE_CLOSE = '}';
+const OPERATOR_SPREAD = '...';
 
 const punctuatorRegexp = /([\!\(\)\:\[\]\{\}])/g;
-
 // https://facebook.github.io/graphql/#sec-Names
 const nameRegexp = /[_A-Za-z][_0-9A-Za-z]*/;
+const spreadRegexp = /^\.\.\./;
 
 const isValidName = (name) => nameRegexp.test(name);
-
 const last = (list) => list[list.length - 1];
+const forEach = (obj, fn) => Object.keys(obj).forEach((name) => fn(obj[name], name, obj));
 
 const getInnerTokens = (tokens, opening, closing, start = 0) => {
   let level = 0;
@@ -55,8 +56,7 @@ export default (PropTypes, extension) => {
   };
 
   const addTypes = (dest, typeOverrides) => {
-    Object.keys(typeOverrides).forEach((name) => {
-      const type = typeOverrides[name];
+    forEach(typeOverrides, (type, name) => {
       if (typeof type === 'function' && type.prototype) {
         dest[name] = PropTypes.instanceOf(type);
       } else {
@@ -143,11 +143,22 @@ export default (PropTypes, extension) => {
       switch (state) {
 
       case STATE_NEED_NAME:
-        if (!isValidName(token)) {
-          throw new Error(`Expected valid name. Instead, saw '${token}'.`);
+        if (spreadRegexp.test(token)) {
+          name = token.substring(3);
+          if (!namedPropTypes[name]) {
+            throw new Error(`Unknown type to spread. name=${name}`);
+          }
+
+          forEach(namedPropTypes[name], (value, key) => shape[key] = value);
+          state = STATE_NEED_NAME;
+        } else {
+          if (!isValidName(token)) {
+            throw new Error(`Expected valid name. Instead, saw '${token}'.`);
+          }
+
+          name = token;
+          state = STATE_NEED_NAME_COLON;
         }
-        name = token;
-        state = STATE_NEED_NAME_COLON;
         break;
 
       case STATE_NEED_NAME_COLON:

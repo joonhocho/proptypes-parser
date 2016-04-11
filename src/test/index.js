@@ -257,4 +257,43 @@ describe('PropTypes', () => {
     testFail(garagePropTypes.cars, [null]);
     testFail(garagePropTypes.cars, null);
   });
+
+
+  it('should allow composition with spread operator.', () => {
+    const parser = createParser(PropTypes);
+
+    assert.throws(() => {
+      // Cannot spread unknown type.
+      const carWithMakePropTypes = parser(`
+        CarWithMake {
+          ...Car
+          make: String!
+        }
+      `);
+    }, /unknown type/i);
+
+    const carPropTypes = parser(`
+      Car {
+        year: Number!
+        model: String!
+      }
+    `);
+
+    const carWithMakePropTypes = parser(`
+      CarWithMake {
+        ...Car
+        make: String!
+      }
+    `);
+
+    // carPropTypes stays untouched.
+    assert.equal(carPropTypes.make, undefined);
+
+    // Inherited from Car
+    assert.equal(carWithMakePropTypes.year, PropTypes.number.isRequired);
+    assert.equal(carWithMakePropTypes.model, PropTypes.string.isRequired);
+
+    // Additional field
+    assert.equal(carWithMakePropTypes.make, PropTypes.string.isRequired);
+  });
 });
