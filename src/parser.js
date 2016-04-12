@@ -9,9 +9,37 @@ const CHAR_LIST_OPEN = '[';
 const CHAR_LIST_CLOSE = ']';
 const CHAR_SHAPE_OPEN = '{';
 const CHAR_SHAPE_CLOSE = '}';
+const CHAR_GROUP_OPEN = '(';
+const CHAR_GROUP_CLOSE = ')';
+const CHAR_QUOTE_OPEN = "'";
+const CHAR_QUOTE_CLOSE = "'";
+
+const GROUPS = {
+  [CHAR_LIST_OPEN]: {
+    type: 'LIST',
+    opening: CHAR_LIST_OPEN,
+    closing: CHAR_LIST_CLOSE,
+  },
+  [CHAR_SHAPE_OPEN]: {
+    type: 'SHAPE',
+    opening: CHAR_SHAPE_OPEN,
+    closing: CHAR_SHAPE_CLOSE,
+  },
+  [CHAR_GROUP_OPEN]: {
+    type: 'GROUP',
+    opening: CHAR_GROUP_OPEN,
+    closing: CHAR_GROUP_CLOSE,
+  },
+  [CHAR_QUOTE_OPEN]: {
+    type: 'QUOTE',
+    opening: CHAR_QUOTE_OPEN,
+    closing: CHAR_QUOTE_CLOSE,
+  },
+};
+
 const OPERATOR_SPREAD = '...';
 
-const punctuatorRegexp = /([\!\(\)\:\[\]\{\}])/g;
+const punctuatorRegexp = /([\!\(\)\:\[\]\{\}\'\,])/g;
 // https://facebook.github.io/graphql/#sec-Names
 const nameRegexp = /[_A-Za-z][_0-9A-Za-z]*/;
 const spreadRegexp = /^\.\.\./;
@@ -24,13 +52,13 @@ const getInnerTokens = (tokens, opening, closing, start = 0) => {
   let level = 0;
   for (let i = start; i < tokens.length; i++) {
     const token = tokens[i];
-    if (token === opening) {
-      level++;
-    } else if (token === closing) {
+    if (token === closing) {
       if (!level) {
         return tokens.slice(start, i);
       }
       level--;
+    } else if (token === opening) {
+      level++;
     }
   }
   throw new Error(`No closing char is found. char=${closing}`);
@@ -76,6 +104,32 @@ export default (PropTypes, extension) => {
     if (tmpTypes[name]) return tmpTypes[name];
     if (types[name]) return types[name];
     throw new Error(`Expected valid named type. Instead, saw '${name}'.`);
+  };
+
+  const buildTree = (tokens) => {
+    const node = {
+      children: [],
+    };
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      let child;
+      if (GROUPS[token]) {
+        const group = GROUPS[token];
+        const innerTokens = getInnerTokens(tokens, token, group.closing, i + 1);
+        child = {
+          ...group,
+          ...buildTree(innerTokens),
+        };
+        i += innerTokens.length + 1;
+      } else {
+        child = {
+          type: 'LEAF',
+          token,
+        };
+      }
+      node.children.push(child);
+    }
+    return node;
   };
 
   const parseType = (tokens) => {
@@ -241,6 +295,9 @@ export default (PropTypes, extension) => {
 
   const parser = (string, typeOverrides) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
+
+    console.log('tokens', tokens.join(' '));
+    console.log(JSON.stringify(buildTree(tokens), null, '  '));
 
     let name;
     if (isValidName(tokens[0])) {

@@ -359,9 +359,15 @@ describe('PropTypes', () => {
     const propTypesWithEnum = parser(`{
       mediaType: NewsOrPhotos
     }`);
+
     testPass(propTypesWithEnum.mediaType, undefined);
     testPass(propTypesWithEnum.mediaType, 'News');
     testPass(propTypesWithEnum.mediaType, 'Photos');
     testFail(propTypesWithEnum.mediaType, 'Video');
+
+    parser(`Car {
+      mediaType: [(String | Number)!]!
+      union: ['News', 'Photos']
+    }`);
   });
 });
