@@ -371,8 +371,11 @@ describe('PropTypes', () => {
           String |
           Number |
           {
+            ...Team
             name: Value! | String!
+            ...Car
             array: [{name: (Number | String)!}]
+            ...Base
           }
         )!
       ]!

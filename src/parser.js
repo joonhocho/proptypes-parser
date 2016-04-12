@@ -143,9 +143,6 @@ export default (PropTypes, extension) => {
     throw new Error(`Expected valid named type. Instead, saw '${name}'.`);
   };
 
-  const buildAssignment = (tokens) => {
-  };
-
   const splitAssignments = (children) => {
     const assignments = [];
 
@@ -154,29 +151,32 @@ export default (PropTypes, extension) => {
     let operatorNode = null;
     let valueNodes = [];
 
-    const isColonNode = ({type, token}) =>
+    const isColonNode = ({type, value}) =>
         type === NODE_TYPE_LEAF &&
-        token === CHAR_ASSIGNMENT;
+        value === CHAR_ASSIGNMENT;
 
-    const isSpreadNode = ({type, token}) =>
+    const isSpreadNode = ({type, value}) =>
         type === NODE_TYPE_LEAF &&
-        spreadRegexp.test(token);
+        spreadRegexp.test(value);
 
     for (let i = 0; i < children.length; i++) {
       const node = children[i];
-      const {type, token} = node;
+      const {type, value} = node;
 
       switch (state) {
       case STATE_NEED_NAME:
         if (type !== NODE_TYPE_LEAF) {
-          throw new Error('Expected property name.');
           console.error(node);
+          throw new Error('Expected property name.');
         }
         if (isSpreadNode(node)) {
           assignments.push({
             type: NODE_TYPE_SPREAD,
-            token,
-            name: token.substring(3),
+            value,
+            right: {
+              type: NODE_TYPE_LEAF,
+              value: value.substring(3),
+            }
           });
           state = STATE_NEED_NAME;
         } else {
@@ -186,6 +186,7 @@ export default (PropTypes, extension) => {
         break;
       case STATE_NEED_NAME_COLON:
         if (!isColonNode(node)) {
+          console.error(node, nameNode, operatorNode, valueNodes);
           throw new Error(`Expected assignment operator, '${CHAR_ASSIGNMENT}'`);
         }
         operatorNode = node;
@@ -194,6 +195,7 @@ export default (PropTypes, extension) => {
       case STATE_NEED_TYPE:
         if (isColonNode(node)) {
           if (valueNodes.length < 2) {
+            console.error(node, nameNode, operatorNode, valueNodes);
             throw new Error(`Unexpected assignment operator, '${CHAR_ASSIGNMENT}'`);
           }
 
@@ -201,15 +203,15 @@ export default (PropTypes, extension) => {
 
           nameNode = valueNodes.pop();
           if (nameNode.type !== NODE_TYPE_LEAF) {
+            console.error(node, nameNode, operatorNode, valueNodes);
             throw new Error('Expected property name before colon.');
-            console.error(nameNode);
           }
 
           assignments.push({
             type: NODE_TYPE_ASSIGNMENT,
-            name: prevNameNode,
-            operator: operatorNode,
-            value: valueNodes,
+            value: operatorNode.value,
+            left: prevNameNode,
+            right: valueNodes,
           });
 
           operatorNode = node;
@@ -217,20 +219,23 @@ export default (PropTypes, extension) => {
           state = STATE_NEED_TYPE;
         } else if (isSpreadNode(node)) {
           if (!valueNodes.length) {
-            throw new Error(`Expected type, but saw spread operator. name=${nameNode.token}`);
+            throw new Error(`Expected type, but saw spread operator. name=${nameNode.value}`);
           }
 
           assignments.push(
             {
               type: NODE_TYPE_ASSIGNMENT,
-              name: nameNode,
-              operator: operatorNode,
-              value: valueNodes,
+              value: operatorNode.value,
+              left: nameNode,
+              right: valueNodes,
             },
             {
               type: NODE_TYPE_SPREAD,
-              token,
-              name: token.substring(3),
+              value,
+              right: {
+                type: NODE_TYPE_LEAF,
+                value: value.substring(3),
+              }
             }
           );
           nameNode = null;
@@ -250,20 +255,66 @@ export default (PropTypes, extension) => {
           assignments.push(
             {
               type: NODE_TYPE_ASSIGNMENT,
-              name: nameNode,
-              operator: operatorNode,
-              value: valueNodes,
+              value: operatorNode.value,
+              left: nameNode,
+              right: valueNodes,
             }
           );
         } else {
-          throw new Error(`Expected type after colon. name=${nameNode.token}`);
+          throw new Error(`Expected type after colon. name=${nameNode.value}`);
         }
       } else {
-        throw new Error(`Unexpected name. name=${nameNode.token}`);
+        throw new Error(`Unexpected name. name=${nameNode.value}`);
       }
     }
 
     return assignments;
+  };
+
+  const buildExpressions = (tokens) => {
+    let copy = [];
+
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token.value === CHAR_REQUIRED) {
+        const lastToken = copy.pop();
+        if (!lastToken) {
+          // postfix unary operator
+          throw new Error(`Expected type before '${CHAR_REQUIRED}'.`);
+        }
+        copy.push({
+          type: NODE_TYPE_REQUIRED,
+          value: CHAR_REQUIRED,
+          left: lastToken,
+        });
+      } else {
+        copy.push(token);
+      }
+    }
+
+    tokens = copy;
+    copy = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token.value === CHAR_UNION) {
+        const lastToken = copy.pop();
+        const nextToken = tokens[i + 1];
+        if (!lastToken || !nextToken) {
+          throw new Error(`Expected types on both sides of '${CHAR_UNION}'.`);
+        }
+        copy.push({
+          type: NODE_TYPE_UNION,
+          value: CHAR_UNION,
+          left: lastToken,
+          right: nextToken,
+        });
+        i = i + 2;
+      } else {
+        copy.push(token);
+      }
+    }
+
+    return copy;
   };
 
   const buildTreeByGrouping = (tokens) => {
@@ -282,6 +333,14 @@ export default (PropTypes, extension) => {
         };
         if (token === CHAR_SHAPE_OPEN) {
           child.children = splitAssignments(child.children);
+        }
+        if (token === CHAR_SHAPE_OPEN || token === CHAR_GROUP_OPEN || token === CHAR_LIST_OPEN) {
+          child.children.forEach((child) => {
+            const {type, right} = child;
+            if (type === NODE_TYPE_ASSIGNMENT) {
+              child.right = buildExpressions(right);
+            }
+          });
         }
         i += innerTokens.length + 1;
       } else {
@@ -327,7 +386,7 @@ export default (PropTypes, extension) => {
         default:
           child = {
             type: NODE_TYPE_LEAF,
-            token,
+            value: token,
           };
         }
       }
@@ -395,7 +454,7 @@ export default (PropTypes, extension) => {
     let state = STATE_NEED_NAME;
     let name = null;
     for (let i = 0; i < children.length; i++) {
-      const {type, token} = children[i];
+      const {type, value} = children[i];
       let innerTokens;
 
       switch (state) {
@@ -405,8 +464,8 @@ export default (PropTypes, extension) => {
           throw new Error(`Expected valid name. Instead, saw '${type}' node.`);
         }
 
-        if (spreadRegexp.test(token)) {
-          name = token.substring(3);
+        if (spreadRegexp.test(value)) {
+          name = value.substring(3);
           if (!namedPropTypes[name]) {
             throw new Error(`Unknown type to spread. name=${name}`);
           }
@@ -414,18 +473,18 @@ export default (PropTypes, extension) => {
           copy(shape, namedPropTypes[name]);
           state = STATE_NEED_NAME;
         } else {
-          if (!isValidName(token)) {
-            throw new Error(`Expected valid name. Instead, saw '${token}'.`);
+          if (!isValidName(value)) {
+            throw new Error(`Expected valid name. Instead, saw '${value}'.`);
           }
 
-          name = token;
+          name = value;
           state = STATE_NEED_NAME_COLON;
         }
         break;
 
       case STATE_NEED_NAME_COLON:
-        if (token !== CHAR_ASSIGNMENT) {
-          throw new Error(`Expected colon after name='${name}'. Instead, saw '${token}'.`);
+        if (value !== CHAR_ASSIGNMENT) {
+          throw new Error(`Expected colon after name='${name}'. Instead, saw '${value}'.`);
         }
         state = STATE_NEED_TYPE;
         break;
@@ -453,7 +512,7 @@ export default (PropTypes, extension) => {
           break;
 
         default:
-          shape[name] = getType(token);
+          shape[name] = getType(value);
           break;
         }
 
@@ -461,7 +520,7 @@ export default (PropTypes, extension) => {
         break;
 
       case STATE_SEEN_TYPE:
-        switch (token) {
+        switch (value) {
         case CHAR_REQUIRED:
           // Non-Null / PropTypes.isRequired
           if (!shape[name].isRequired) {
@@ -506,14 +565,14 @@ export default (PropTypes, extension) => {
     let state = STATE_NEED_NAME;
     let name = null;
     for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
+      const value = tokens[i];
       let innerTokens;
 
       switch (state) {
 
       case STATE_NEED_NAME:
-        if (spreadRegexp.test(token)) {
-          name = token.substring(3);
+        if (spreadRegexp.test(value)) {
+          name = value.substring(3);
           if (!namedPropTypes[name]) {
             throw new Error(`Unknown type to spread. name=${name}`);
           }
@@ -521,24 +580,24 @@ export default (PropTypes, extension) => {
           copy(shape, namedPropTypes[name]);
           state = STATE_NEED_NAME;
         } else {
-          if (!isValidName(token)) {
-            throw new Error(`Expected valid name. Instead, saw '${token}'.`);
+          if (!isValidName(value)) {
+            throw new Error(`Expected valid name. Instead, saw '${value}'.`);
           }
 
-          name = token;
+          name = value;
           state = STATE_NEED_NAME_COLON;
         }
         break;
 
       case STATE_NEED_NAME_COLON:
-        if (token !== CHAR_ASSIGNMENT) {
-          throw new Error(`Expected colon after name='${name}'. Instead, saw '${token}'.`);
+        if (value !== CHAR_ASSIGNMENT) {
+          throw new Error(`Expected colon after name='${name}'. Instead, saw '${value}'.`);
         }
         state = STATE_NEED_TYPE;
         break;
 
       case STATE_NEED_TYPE:
-        switch (token) {
+        switch (value) {
         case CHAR_LIST_OPEN:
           // List / PropTypes.arrayOf
           // Enum / PropTypes.oneOf
@@ -555,7 +614,7 @@ export default (PropTypes, extension) => {
           break;
 
         default:
-          shape[name] = getType(token);
+          shape[name] = getType(value);
           break;
         }
 
@@ -563,7 +622,7 @@ export default (PropTypes, extension) => {
         break;
 
       case STATE_SEEN_TYPE:
-        switch (token) {
+        switch (value) {
         case CHAR_REQUIRED:
           // Non-Null / PropTypes.isRequired
           if (!shape[name].isRequired) {
