@@ -3,6 +3,7 @@ const STATE_NEED_NAME_COLON = 'need_name_colon';
 const STATE_NEED_TYPE = 'need_type';
 const STATE_SEEN_TYPE = 'seen_type';
 
+
 const CHAR_ASSIGNMENT = ':';
 const CHAR_REQUIRED = '!';
 const CHAR_UNION = '|';
@@ -55,8 +56,20 @@ const nameRegexp = /[_A-Za-z][_0-9A-Za-z]*/;
 const spreadRegexp = /^\.\.\./;
 
 const isValidName = (name) => nameRegexp.test(name);
+
 const last = (list) => list[list.length - 1];
-const forEach = (obj, fn) => Object.keys(obj).forEach((name) => fn(obj[name], name, obj));
+
+const forEach = (obj, fn) =>
+  Object.keys(obj).forEach((name) => fn(obj[name], name, obj));
+
+const copy = (dest, src) =>
+  forEach(src, (value, key) => { dest[key] = value; });
+
+const createCleanObject = (props) => {
+  const obj = Object.create(null);
+  if (props) copy(obj, props);
+  return obj;
+};
 
 const getInnerTokens = (tokens, opening, closing, start = 0) => {
   let level = 0;
@@ -74,12 +87,13 @@ const getInnerTokens = (tokens, opening, closing, start = 0) => {
   throw new Error(`No closing char is found. char=${closing}`);
 };
 
+
 export default (PropTypes, extension) => {
   if (!PropTypes) {
     throw new Error('Must provide React.PropTypes.');
   }
 
-  const types = {
+  const types = createCleanObject({
     Array: PropTypes.array,
     Boolean: PropTypes.bool,
     Function: PropTypes.func,
@@ -91,7 +105,12 @@ export default (PropTypes, extension) => {
     Any: PropTypes.any,
     Date: PropTypes.instanceOf(Date),
     RegExp: PropTypes.instanceOf(RegExp),
-  };
+  });
+
+  const namedPropTypes = createCleanObject();
+
+  let tmpTypes;
+
 
   const maybeConvertClassToType = (type) => {
     if (typeof type === 'function' && type.prototype) {
@@ -106,9 +125,17 @@ export default (PropTypes, extension) => {
     });
   };
 
-  if (extension) addTypes(types, extension);
+  if (extension) {
+    addTypes(types, extension);
+  }
 
-  let tmpTypes = {};
+  const addPropTypes = (name, propTypes) => {
+    if (types[name]) {
+      throw new Error(`'${name}' type is already defined.`);
+    }
+    namedPropTypes[name] = propTypes;
+    types[name] = PropTypes.shape(propTypes);
+  };
 
   const getType = (name) => {
     if (tmpTypes[name]) return tmpTypes[name];
@@ -249,6 +276,7 @@ export default (PropTypes, extension) => {
       if (GROUPS[token]) {
         const group = GROUPS[token];
         const innerTokens = getInnerTokens(tokens, token, group.closing, i + 1);
+        const subtree = buildTree(innerTokens);
         child = {
           ...group,
           ...buildTreeByGrouping(innerTokens),
@@ -309,6 +337,7 @@ export default (PropTypes, extension) => {
     return node;
   };
 
+
   const parseType = (tokens) => {
     const isRequired = last(tokens) === CHAR_REQUIRED;
     if (isRequired) {
@@ -359,6 +388,117 @@ export default (PropTypes, extension) => {
   };
 
 
+  const parseShapeNode = ({children}) => {
+    if (!children.length) throw new Error('Empty shape.');
+
+    const shape = {};
+
+    let state = STATE_NEED_NAME;
+    let name = null;
+    for (let i = 0; i < children.length; i++) {
+      const {type, token} = children[i];
+      let innerTokens;
+
+      switch (state) {
+
+      case STATE_NEED_NAME:
+        if (type !== NODE_TYPE_LEAF) {
+          throw new Error(`Expected valid name. Instead, saw '${type}' node.`);
+        }
+
+        if (spreadRegexp.test(token)) {
+          name = token.substring(3);
+          if (!namedPropTypes[name]) {
+            throw new Error(`Unknown type to spread. name=${name}`);
+          }
+
+          copy(shape, namedPropTypes[name]);
+          state = STATE_NEED_NAME;
+        } else {
+          if (!isValidName(token)) {
+            throw new Error(`Expected valid name. Instead, saw '${token}'.`);
+          }
+
+          name = token;
+          state = STATE_NEED_NAME_COLON;
+        }
+        break;
+
+      case STATE_NEED_NAME_COLON:
+        if (token !== CHAR_ASSIGNMENT) {
+          throw new Error(`Expected colon after name='${name}'. Instead, saw '${token}'.`);
+        }
+        state = STATE_NEED_TYPE;
+        break;
+
+      case STATE_NEED_TYPE:
+        const NODE_TYPE_LEAF = 'LEAF';
+        const NODE_TYPE_LIST = 'LIST';
+        const NODE_TYPE_SHAPE = 'SHAPE';
+        const NODE_TYPE_GROUP = 'GROUP';
+        const NODE_TYPE_QUOTE = 'QUOTE';
+        switch (type) {
+        case CHAR_LIST_OPEN:
+          // List / PropTypes.arrayOf
+          // Enum / PropTypes.oneOf
+          innerTokens = getInnerTokens(tokens, CHAR_LIST_OPEN, CHAR_LIST_CLOSE, i + 1);
+          shape[name] = PropTypes.arrayOf(parseType(innerTokens));
+          i += innerTokens.length + 1;
+          break;
+
+        case CHAR_SHAPE_OPEN:
+          // Object / PropTypes.object / PropTypes.objectOf
+          innerTokens = getInnerTokens(tokens, CHAR_SHAPE_OPEN, CHAR_SHAPE_CLOSE, i + 1);
+          shape[name] = PropTypes.shape(parseShape(innerTokens));
+          i += innerTokens.length + 1;
+          break;
+
+        default:
+          shape[name] = getType(token);
+          break;
+        }
+
+        state = STATE_SEEN_TYPE;
+        break;
+
+      case STATE_SEEN_TYPE:
+        switch (token) {
+        case CHAR_REQUIRED:
+          // Non-Null / PropTypes.isRequired
+          if (!shape[name].isRequired) {
+            throw new Error(`Type does support isRequired. name=${name}`);
+          }
+          shape[name] = shape[name].isRequired;
+          state = STATE_NEED_NAME;
+          break;
+
+        /*
+        TODO: Support Union
+        case '|':
+          // Union / PropTypes.oneOfType
+          break;
+        */
+
+        default:
+          state = STATE_NEED_NAME;
+          i--;
+          break;
+        }
+        break;
+
+      default:
+        throw new Error(`Unknown state. state=${state}`);
+      }
+    }
+
+    if (state === STATE_NEED_NAME_COLON || state === STATE_NEED_TYPE) {
+      throw new Error(`Incomplete shape. ${tokens}`);
+    }
+
+    return shape;
+  };
+
+
   const parseShape = (tokens) => {
     if (!tokens.length) throw new Error('Empty shape.');
 
@@ -379,7 +519,7 @@ export default (PropTypes, extension) => {
             throw new Error(`Unknown type to spread. name=${name}`);
           }
 
-          forEach(namedPropTypes[name], (value, key) => shape[key] = value);
+          copy(shape, namedPropTypes[name]);
           state = STATE_NEED_NAME;
         } else {
           if (!isValidName(token)) {
@@ -460,15 +600,6 @@ export default (PropTypes, extension) => {
     return shape;
   };
 
-  const namedPropTypes = {};
-
-  const addPropTypes = (name, propTypes) => {
-    if (types[name]) {
-      throw new Error(`'${name}' type is already defined.`);
-    }
-    namedPropTypes[name] = propTypes;
-    types[name] = PropTypes.shape(propTypes);
-  };
 
   const parser = (string, typeOverrides) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
@@ -486,7 +617,7 @@ export default (PropTypes, extension) => {
       throw new Error('Must wrap definition with { }.');
     }
 
-    tmpTypes = {};
+    tmpTypes = createCleanObject();
     if (typeOverrides) addTypes(tmpTypes, typeOverrides);
 
     if (types[name] || tmpTypes[name]) {
