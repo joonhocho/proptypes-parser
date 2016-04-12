@@ -366,7 +366,16 @@ describe('PropTypes', () => {
     testFail(propTypesWithEnum.mediaType, 'Video');
 
     parser(`Car {
-      mediaType: [(String | Number)!]!
+      mediaType: [
+        (
+          String |
+          Number |
+          {
+            name: Value! | String!
+            array: [{name: (Number | String)!}]
+          }
+        )!
+      ]!
       union: ['News', 'Photos']
     }`);
   });

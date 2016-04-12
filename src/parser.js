@@ -3,8 +3,10 @@ const STATE_NEED_NAME_COLON = 'need_name_colon';
 const STATE_NEED_TYPE = 'need_type';
 const STATE_SEEN_TYPE = 'seen_type';
 
-const CHAR_COLON = ':';
+const CHAR_ASSIGNMENT = ':';
 const CHAR_REQUIRED = '!';
+const CHAR_UNION = '|';
+
 const CHAR_LIST_OPEN = '[';
 const CHAR_LIST_CLOSE = ']';
 const CHAR_SHAPE_OPEN = '{';
@@ -14,30 +16,38 @@ const CHAR_GROUP_CLOSE = ')';
 const CHAR_QUOTE_OPEN = "'";
 const CHAR_QUOTE_CLOSE = "'";
 
+const NODE_TYPE_LEAF = 'LEAF';
+const NODE_TYPE_ASSIGNMENT = 'ASSIGNMENT';
+const NODE_TYPE_SPREAD = 'SPREAD';
+const NODE_TYPE_REQUIRED = 'REQUIRED';
+const NODE_TYPE_UNION = 'UNION';
+const NODE_TYPE_LIST = 'LIST';
+const NODE_TYPE_SHAPE = 'SHAPE';
+const NODE_TYPE_GROUP = 'GROUP';
+const NODE_TYPE_QUOTE = 'QUOTE';
+
 const GROUPS = {
   [CHAR_LIST_OPEN]: {
-    type: 'LIST',
+    type: NODE_TYPE_LIST,
     opening: CHAR_LIST_OPEN,
     closing: CHAR_LIST_CLOSE,
   },
   [CHAR_SHAPE_OPEN]: {
-    type: 'SHAPE',
+    type: NODE_TYPE_SHAPE,
     opening: CHAR_SHAPE_OPEN,
     closing: CHAR_SHAPE_CLOSE,
   },
   [CHAR_GROUP_OPEN]: {
-    type: 'GROUP',
+    type: NODE_TYPE_GROUP,
     opening: CHAR_GROUP_OPEN,
     closing: CHAR_GROUP_CLOSE,
   },
   [CHAR_QUOTE_OPEN]: {
-    type: 'QUOTE',
+    type: NODE_TYPE_QUOTE,
     opening: CHAR_QUOTE_OPEN,
     closing: CHAR_QUOTE_CLOSE,
   },
 };
-
-const OPERATOR_SPREAD = '...';
 
 const punctuatorRegexp = /([\!\(\)\:\[\]\{\}\'\,])/g;
 // https://facebook.github.io/graphql/#sec-Names
@@ -106,7 +116,130 @@ export default (PropTypes, extension) => {
     throw new Error(`Expected valid named type. Instead, saw '${name}'.`);
   };
 
-  const buildTree = (tokens) => {
+  const buildAssignment = (tokens) => {
+  };
+
+  const splitAssignments = (children) => {
+    const assignments = [];
+
+    let state = STATE_NEED_NAME;
+    let nameNode = null;
+    let operatorNode = null;
+    let valueNodes = [];
+
+    const isColonNode = ({type, token}) =>
+        type === NODE_TYPE_LEAF &&
+        token === CHAR_ASSIGNMENT;
+
+    const isSpreadNode = ({type, token}) =>
+        type === NODE_TYPE_LEAF &&
+        spreadRegexp.test(token);
+
+    for (let i = 0; i < children.length; i++) {
+      const node = children[i];
+      const {type, token} = node;
+
+      switch (state) {
+      case STATE_NEED_NAME:
+        if (type !== NODE_TYPE_LEAF) {
+          throw new Error('Expected property name.');
+          console.error(node);
+        }
+        if (isSpreadNode(node)) {
+          assignments.push({
+            type: NODE_TYPE_SPREAD,
+            token,
+            name: token.substring(3),
+          });
+          state = STATE_NEED_NAME;
+        } else {
+          nameNode = node;
+          state = STATE_NEED_NAME_COLON;
+        }
+        break;
+      case STATE_NEED_NAME_COLON:
+        if (!isColonNode(node)) {
+          throw new Error(`Expected assignment operator, '${CHAR_ASSIGNMENT}'`);
+        }
+        operatorNode = node;
+        state = STATE_NEED_TYPE;
+        break;
+      case STATE_NEED_TYPE:
+        if (isColonNode(node)) {
+          if (valueNodes.length < 2) {
+            throw new Error(`Unexpected assignment operator, '${CHAR_ASSIGNMENT}'`);
+          }
+
+          const prevNameNode = nameNode;
+
+          nameNode = valueNodes.pop();
+          if (nameNode.type !== NODE_TYPE_LEAF) {
+            throw new Error('Expected property name before colon.');
+            console.error(nameNode);
+          }
+
+          assignments.push({
+            type: NODE_TYPE_ASSIGNMENT,
+            name: prevNameNode,
+            operator: operatorNode,
+            value: valueNodes,
+          });
+
+          operatorNode = node;
+          valueNodes = [];
+          state = STATE_NEED_TYPE;
+        } else if (isSpreadNode(node)) {
+          if (!valueNodes.length) {
+            throw new Error(`Expected type, but saw spread operator. name=${nameNode.token}`);
+          }
+
+          assignments.push(
+            {
+              type: NODE_TYPE_ASSIGNMENT,
+              name: nameNode,
+              operator: operatorNode,
+              value: valueNodes,
+            },
+            {
+              type: NODE_TYPE_SPREAD,
+              token,
+              name: token.substring(3),
+            }
+          );
+          nameNode = null;
+          operatorNode = null;
+          valueNodes = [];
+          state = STATE_NEED_NAME;
+        } else {
+          valueNodes.push(node);
+        }
+        break;
+      }
+    }
+
+    if (nameNode) {
+      if (operatorNode) {
+        if (valueNodes.length) {
+          assignments.push(
+            {
+              type: NODE_TYPE_ASSIGNMENT,
+              name: nameNode,
+              operator: operatorNode,
+              value: valueNodes,
+            }
+          );
+        } else {
+          throw new Error(`Expected type after colon. name=${nameNode.token}`);
+        }
+      } else {
+        throw new Error(`Unexpected name. name=${nameNode.token}`);
+      }
+    }
+
+    return assignments;
+  };
+
+  const buildTreeByGrouping = (tokens) => {
     const node = {
       children: [],
     };
@@ -118,14 +251,58 @@ export default (PropTypes, extension) => {
         const innerTokens = getInnerTokens(tokens, token, group.closing, i + 1);
         child = {
           ...group,
-          ...buildTree(innerTokens),
+          ...buildTreeByGrouping(innerTokens),
         };
+        if (token === CHAR_SHAPE_OPEN) {
+          child.children = splitAssignments(child.children);
+        }
         i += innerTokens.length + 1;
       } else {
-        child = {
-          type: 'LEAF',
-          token,
-        };
+        let lastChild;
+        switch (token) {
+          /*
+        case CHAR_ASSIGNMENT = ':':
+          lastChild = node.children.pop();
+          if (!lastChild || lastChild.type !== NODE_TYPE_LEAF) {
+            throw new Error(`Name is required before '${CHAR_ASSIGNMENT}'`);
+          }
+          const {value, nextIndex} = buildAssignment(tokens.slice(i + 1);
+          child = {
+            type: NODE_TYPE_ASSIGNMENT,
+            token,
+            left: lastChild,
+            right: value,
+          };
+          i = nextIndex;
+          break;
+        case CHAR_REQUIRED = '!':
+          lastChild = node.children.pop();
+          child = {
+            type: NODE_TYPE_REQUIRED,
+            token,
+            left: lastChild,
+          };
+          break;
+        case CHAR_UNION = '|':
+          lastChild = node.children.pop();
+          if (i >= tokens.length - 1) {
+            throw new Error(`Union needs another type.`);
+          }
+          child = {
+            type: NODE_TYPE_ASSIGNMENT,
+            token,
+            left: lastChild,
+            right: buildTreeByGrouping(tokens.slice(i + 1)),
+          };
+          i = tokens.length;
+          break;
+          */
+        default:
+          child = {
+            type: NODE_TYPE_LEAF,
+            token,
+          };
+        }
       }
       node.children.push(child);
     }
@@ -215,7 +392,7 @@ export default (PropTypes, extension) => {
         break;
 
       case STATE_NEED_NAME_COLON:
-        if (token !== CHAR_COLON) {
+        if (token !== CHAR_ASSIGNMENT) {
           throw new Error(`Expected colon after name='${name}'. Instead, saw '${token}'.`);
         }
         state = STATE_NEED_TYPE;
@@ -297,7 +474,7 @@ export default (PropTypes, extension) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
 
     console.log('tokens', tokens.join(' '));
-    console.log(JSON.stringify(buildTree(tokens), null, '  '));
+    console.log(JSON.stringify(buildTreeByGrouping(tokens), null, '  '));
 
     let name;
     if (isValidName(tokens[0])) {
