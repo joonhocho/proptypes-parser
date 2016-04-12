@@ -276,7 +276,6 @@ export default (PropTypes, extension) => {
       if (GROUPS[token]) {
         const group = GROUPS[token];
         const innerTokens = getInnerTokens(tokens, token, group.closing, i + 1);
-        const subtree = buildTree(innerTokens);
         child = {
           ...group,
           ...buildTreeByGrouping(innerTokens),
