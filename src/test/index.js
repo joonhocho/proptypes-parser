@@ -321,6 +321,23 @@ describe('PropTypes', () => {
   it('should allow adding propTypes.', () => {
     const parser = createParser(PropTypes);
 
+    parser(`Car {
+      mediaType: [
+        (
+          String |
+          Number |
+          {
+            ...Team
+            name: Value! | String!
+            ...Car
+            array: [{name: (Number | String)!}]
+            ...Base
+          }
+        )!
+      ]!
+      union: ['News', 'Photos']
+    }`);
+
     assert.throws(() => {
       parser(`{ message: Message }`);
     }, /Message/i);
@@ -364,22 +381,5 @@ describe('PropTypes', () => {
     testPass(propTypesWithEnum.mediaType, 'News');
     testPass(propTypesWithEnum.mediaType, 'Photos');
     testFail(propTypesWithEnum.mediaType, 'Video');
-
-    parser(`Car {
-      mediaType: [
-        (
-          String |
-          Number |
-          {
-            ...Team
-            name: Value! | String!
-            ...Car
-            array: [{name: (Number | String)!}]
-            ...Base
-          }
-        )!
-      ]!
-      union: ['News', 'Photos']
-    }`);
   });
 });

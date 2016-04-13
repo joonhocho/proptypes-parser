@@ -4,9 +4,10 @@ const STATE_NEED_TYPE = 'need_type';
 const STATE_SEEN_TYPE = 'seen_type';
 
 
-const CHAR_ASSIGNMENT = ':';
-const CHAR_REQUIRED = '!';
-const CHAR_UNION = '|';
+const OPERATOR_ASSIGNMENT = ':';
+const OPERATOR_REQUIRED = '!';
+const OPERATOR_UNION = '|';
+const OPERATOR_SPREAD = '...';
 
 const CHAR_LIST_OPEN = '[';
 const CHAR_LIST_CLOSE = ']';
@@ -50,7 +51,7 @@ const GROUPS = {
   },
 };
 
-const punctuatorRegexp = /([\!\(\)\:\[\]\{\}\'\,])/g;
+const punctuatorRegexp = /([\!\(\)\:\[\]\{\}\'\,]|\.\.\.)/g;
 // https://facebook.github.io/graphql/#sec-Names
 const nameRegexp = /[_A-Za-z][_0-9A-Za-z]*/;
 const spreadRegexp = /^\.\.\./;
@@ -143,6 +144,63 @@ export default (PropTypes, extension) => {
     throw new Error(`Expected valid named type. Instead, saw '${name}'.`);
   };
 
+
+  const createLeafNode = (value) => ({
+    type: NODE_TYPE_LEAF,
+    value,
+  });
+
+  const createRequiredNode = (value) => ({
+    type: NODE_TYPE_REQUIRED,
+    value: OPERATOR_REQUIRED,
+    children: [value],
+  });
+
+  const createSpreadNode = (node) => ({
+    type: NODE_TYPE_SPREAD,
+    value: OPERATOR_SPREAD,
+    children: [node],
+  });
+
+  const createUnionNode = (left, right) => ({
+    type: NODE_TYPE_UNION,
+    value: OPERATOR_UNION,
+    children: [left, right],
+  });
+
+  const createAssignmentNode = (name, value) => ({
+    type: NODE_TYPE_ASSIGNMENT,
+    value: OPERATOR_ASSIGNMENT,
+    children: [name, value],
+  });
+
+  const OPERATOR_TYPE_PREFIX = 'PREFIX';
+  const OPERATOR_TYPE_POSTFIX = 'POSTFIX';
+  const OPERATOR_TYPE_BINARY = 'BINARY';
+
+  const operators = [
+    {
+      operator: OPERATOR_REQUIRED,
+      type: OPERATOR_TYPE_POSTFIX,
+      build: (left) => createRequiredNode(left),
+    },
+    {
+      operator: OPERATOR_SPREAD,
+      type: OPERATOR_TYPE_PREFIX,
+      build: (right) => createSpreadNode(right),
+    },
+    {
+      operator: OPERATOR_UNION,
+      type: OPERATOR_TYPE_BINARY,
+      build: (left, right) => createUnionNode(left, right),
+    },
+    {
+      operator: OPERATOR_ASSIGNMENT,
+      type: OPERATOR_TYPE_BINARY,
+      build: (left, right) => createAssignmentNode(left, right),
+    },
+  ];
+
   const splitAssignments = (children) => {
     const assignments = [];
 
@@ -150,14 +208,6 @@ export default (PropTypes, extension) => {
     let nameNode = null;
     let operatorNode = null;
     let valueNodes = [];
-
-    const isColonNode = ({type, value}) =>
-        type === NODE_TYPE_LEAF &&
-        value === CHAR_ASSIGNMENT;
-
-    const isSpreadNode = ({type, value}) =>
-        type === NODE_TYPE_LEAF &&
-        spreadRegexp.test(value);
 
     for (let i = 0; i < children.length; i++) {
       const node = children[i];
@@ -170,14 +220,12 @@ export default (PropTypes, extension) => {
           throw new Error('Expected property name.');
         }
         if (isSpreadNode(node)) {
-          assignments.push({
-            type: NODE_TYPE_SPREAD,
-            value,
-            right: {
-              type: NODE_TYPE_LEAF,
-              value: value.substring(3),
-            }
-          });
+          assignments.push(
+            createSpreadNode(
+              createLeafNode(value.substring(3))
+            )
+          );
+
           state = STATE_NEED_NAME;
         } else {
           nameNode = node;
@@ -187,7 +235,7 @@ export default (PropTypes, extension) => {
       case STATE_NEED_NAME_COLON:
         if (!isColonNode(node)) {
           console.error(node, nameNode, operatorNode, valueNodes);
-          throw new Error(`Expected assignment operator, '${CHAR_ASSIGNMENT}'`);
+          throw new Error(`Expected assignment operator, '${OPERATOR_ASSIGNMENT}'`);
         }
         operatorNode = node;
         state = STATE_NEED_TYPE;
@@ -196,7 +244,7 @@ export default (PropTypes, extension) => {
         if (isColonNode(node)) {
           if (valueNodes.length < 2) {
             console.error(node, nameNode, operatorNode, valueNodes);
-            throw new Error(`Unexpected assignment operator, '${CHAR_ASSIGNMENT}'`);
+            throw new Error(`Unexpected assignment operator, '${OPERATOR_ASSIGNMENT}'`);
           }
 
           const prevNameNode = nameNode;
@@ -207,12 +255,7 @@ export default (PropTypes, extension) => {
             throw new Error('Expected property name before colon.');
           }
 
-          assignments.push({
-            type: NODE_TYPE_ASSIGNMENT,
-            value: operatorNode.value,
-            left: prevNameNode,
-            right: valueNodes,
-          });
+          assignments.push(createAssignmentNode(prevNameNode, valueNodes));
 
           operatorNode = node;
           valueNodes = [];
@@ -223,21 +266,12 @@ export default (PropTypes, extension) => {
           }
 
           assignments.push(
-            {
-              type: NODE_TYPE_ASSIGNMENT,
-              value: operatorNode.value,
-              left: nameNode,
-              right: valueNodes,
-            },
-            {
-              type: NODE_TYPE_SPREAD,
-              value,
-              right: {
-                type: NODE_TYPE_LEAF,
-                value: value.substring(3),
-              }
-            }
+            createAssignmentNode(nameNode, valueNodes),
+            createSpreadNode(
+              createLeafNode(value.substring(3))
+            )
           );
+
           nameNode = null;
           operatorNode = null;
           valueNodes = [];
@@ -252,14 +286,7 @@ export default (PropTypes, extension) => {
     if (nameNode) {
       if (operatorNode) {
         if (valueNodes.length) {
-          assignments.push(
-            {
-              type: NODE_TYPE_ASSIGNMENT,
-              value: operatorNode.value,
-              left: nameNode,
-              right: valueNodes,
-            }
-          );
+          assignments.push(createAssignmentNode(nameNode, valueNodes));
         } else {
           throw new Error(`Expected type after colon. name=${nameNode.value}`);
         }
@@ -271,50 +298,108 @@ export default (PropTypes, extension) => {
     return assignments;
   };
 
-  const buildExpressions = (tokens) => {
-    let copy = [];
 
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-      if (token.value === CHAR_REQUIRED) {
-        const lastToken = copy.pop();
-        if (!lastToken) {
-          // postfix unary operator
-          throw new Error(`Expected type before '${CHAR_REQUIRED}'.`);
+  const transformChildren = (children, {operator, type, build}) => {
+    const newChildren = children.slice();
+    for (let i = 0; i < newChildren.length; i++) {
+      const child = newChildren[i];
+      if (child.value === operator) {
+        let left, right;
+        switch (type) {
+        case OPERATOR_TYPE_PREFIX:
+          right = newChildren[i + 1];
+          if (!right) {
+            throw new Error(`Prefix unary operator '${operator}' requires right side argument.`);
+          }
+          newChildren.splice(i, 2, build(right));
+          break;
+        case OPERATOR_TYPE_POSTFIX:
+          left = newChildren[i - 1];
+          if (!left) {
+            throw new Error(`Prefix unary operator '${operator}' requires left side argument.`);
+          }
+          newChildren.splice(i - 1, 2, build(left));
+          i--;
+          break;
+        case OPERATOR_TYPE_BINARY:
+          left = newChildren[i - 1];
+          if (!left) {
+            throw new Error(`Binary operator '${operator}' requires left side argument.`);
+          }
+          right = newChildren[i + 1];
+          if (!right) {
+            throw new Error(`Binary operator '${operator}' requires right side argument.`);
+          }
+          newChildren.splice(i - 1, 3, build(left, right));
+          i--;
+          break;
         }
-        copy.push({
-          type: NODE_TYPE_REQUIRED,
-          value: CHAR_REQUIRED,
-          left: lastToken,
-        });
-      } else {
-        copy.push(token);
       }
     }
+    return newChildren;
+  };
 
-    tokens = copy;
-    copy = [];
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-      if (token.value === CHAR_UNION) {
-        const lastToken = copy.pop();
-        const nextToken = tokens[i + 1];
-        if (!lastToken || !nextToken) {
-          throw new Error(`Expected types on both sides of '${CHAR_UNION}'.`);
-        }
-        copy.push({
-          type: NODE_TYPE_UNION,
-          value: CHAR_UNION,
-          left: lastToken,
-          right: nextToken,
-        });
-        i = i + 2;
-      } else {
-        copy.push(token);
+  const traverseTreePostOrder = (node, fn) => {
+    const {children} = node;
+    if (children) children.forEach((child) => { traverseTreePostOrder(child, fn); });
+    fn(node);
+  };
+
+  const transformTreeWithOperators = (node) => {
+    traverseTreePostOrder(node, (child) => {
+      const {children} = child;
+      if (children) {
+        child.children = operators.reduce(transformChildren, children);
       }
-    }
+    });
+  };
 
-    return copy;
+  const isColonNode = ({type, value}) =>
+      type === NODE_TYPE_LEAF &&
+      value === OPERATOR_ASSIGNMENT;
+
+  const isSpreadNode = ({type, value}) =>
+      type === NODE_TYPE_LEAF &&
+      spreadRegexp.test(value);
+
+  const isNameNode = ({type, value}) =>
+      type === NODE_TYPE_LEAF &&
+      isValidName(value);
+
+  const transformTreeToPropTypes = (node) => {
+    traverseTreePostOrder(node, (child) => {
+      const {type, children} = child;
+      switch (type) {
+      case NODE_TYPE_ASSIGNMENT:
+        const [left, right] = children;
+        if (!isNameNode(left)) {
+          console.error(left);
+          throw new Error(`Invalid name node.`);
+        }
+        if (right.type === NODE_TYPE_LEAF) {
+          getType(right.value);
+          // TODO
+        }
+        break;
+      case NODE_TYPE_SPREAD:
+        break;
+      case NODE_TYPE_REQUIRED:
+        break;
+      case NODE_TYPE_UNION:
+        break;
+      case NODE_TYPE_LIST:
+        break;
+      case NODE_TYPE_SHAPE:
+        break;
+      case NODE_TYPE_GROUP:
+        break;
+      case NODE_TYPE_QUOTE:
+        break;
+      //case NODE_TYPE_LEAF:
+      default:
+        break;
+      }
+    });
   };
 
   const buildTreeByGrouping = (tokens) => {
@@ -332,25 +417,17 @@ export default (PropTypes, extension) => {
           ...buildTreeByGrouping(innerTokens),
         };
         if (token === CHAR_SHAPE_OPEN) {
-          child.children = splitAssignments(child.children);
-        }
-        if (token === CHAR_SHAPE_OPEN || token === CHAR_GROUP_OPEN || token === CHAR_LIST_OPEN) {
-          child.children.forEach((child) => {
-            const {type, right} = child;
-            if (type === NODE_TYPE_ASSIGNMENT) {
-              child.right = buildExpressions(right);
-            }
-          });
+          //child.children = splitAssignments(child.children);
         }
         i += innerTokens.length + 1;
       } else {
         let lastChild;
         switch (token) {
           /*
-        case CHAR_ASSIGNMENT = ':':
+        case OPERATOR_ASSIGNMENT = ':':
           lastChild = node.children.pop();
           if (!lastChild || lastChild.type !== NODE_TYPE_LEAF) {
-            throw new Error(`Name is required before '${CHAR_ASSIGNMENT}'`);
+            throw new Error(`Name is required before '${OPERATOR_ASSIGNMENT}'`);
           }
           const {value, nextIndex} = buildAssignment(tokens.slice(i + 1);
           child = {
@@ -361,7 +438,7 @@ export default (PropTypes, extension) => {
           };
           i = nextIndex;
           break;
-        case CHAR_REQUIRED = '!':
+        case OPERATOR_REQUIRED = '!':
           lastChild = node.children.pop();
           child = {
             type: NODE_TYPE_REQUIRED,
@@ -369,7 +446,7 @@ export default (PropTypes, extension) => {
             left: lastChild,
           };
           break;
-        case CHAR_UNION = '|':
+        case OPERATOR_UNION = '|':
           lastChild = node.children.pop();
           if (i >= tokens.length - 1) {
             throw new Error(`Union needs another type.`);
@@ -384,10 +461,7 @@ export default (PropTypes, extension) => {
           break;
           */
         default:
-          child = {
-            type: NODE_TYPE_LEAF,
-            value: token,
-          };
+          child = createLeafNode(token);
         }
       }
       node.children.push(child);
@@ -397,7 +471,7 @@ export default (PropTypes, extension) => {
 
 
   const parseType = (tokens) => {
-    const isRequired = last(tokens) === CHAR_REQUIRED;
+    const isRequired = last(tokens) === OPERATOR_REQUIRED;
     if (isRequired) {
       tokens = tokens.slice(0, tokens.length - 1);
     }
@@ -483,7 +557,7 @@ export default (PropTypes, extension) => {
         break;
 
       case STATE_NEED_NAME_COLON:
-        if (value !== CHAR_ASSIGNMENT) {
+        if (value !== OPERATOR_ASSIGNMENT) {
           throw new Error(`Expected colon after name='${name}'. Instead, saw '${value}'.`);
         }
         state = STATE_NEED_TYPE;
@@ -521,7 +595,7 @@ export default (PropTypes, extension) => {
 
       case STATE_SEEN_TYPE:
         switch (value) {
-        case CHAR_REQUIRED:
+        case OPERATOR_REQUIRED:
           // Non-Null / PropTypes.isRequired
           if (!shape[name].isRequired) {
             throw new Error(`Type does support isRequired. name=${name}`);
@@ -590,7 +664,7 @@ export default (PropTypes, extension) => {
         break;
 
       case STATE_NEED_NAME_COLON:
-        if (value !== CHAR_ASSIGNMENT) {
+        if (value !== OPERATOR_ASSIGNMENT) {
           throw new Error(`Expected colon after name='${name}'. Instead, saw '${value}'.`);
         }
         state = STATE_NEED_TYPE;
@@ -623,7 +697,7 @@ export default (PropTypes, extension) => {
 
       case STATE_SEEN_TYPE:
         switch (value) {
-        case CHAR_REQUIRED:
+        case OPERATOR_REQUIRED:
           // Non-Null / PropTypes.isRequired
           if (!shape[name].isRequired) {
             throw new Error(`Type does support isRequired. name=${name}`);
@@ -663,7 +737,12 @@ export default (PropTypes, extension) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
 
     console.log('tokens', tokens.join(' '));
-    console.log(JSON.stringify(buildTreeByGrouping(tokens), null, '  '));
+    const node = buildTreeByGrouping(tokens);
+    console.log(JSON.stringify(node, null, '  '));
+    transformTreeWithOperators(node);
+    console.log(JSON.stringify(node, null, '  '));
+    const propTypesFromTree = transformTreeToPropTypes(node);
+    console.log(propTypesFromTree);
 
     let name;
     if (isValidName(tokens[0])) {
