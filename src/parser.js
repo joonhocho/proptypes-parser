@@ -345,59 +345,222 @@ export default (PropTypes, extension) => {
     fn(node);
   };
 
+  const reduceTreePostOrder = (node, fn) => {
+    const newNode = {...node};
+    if (node.children) {
+      newNode.children = node.children.map((child) => reduceTreePostOrder(child, fn)).filter((x) => x);
+    }
+    return fn(newNode);
+  };
+
   const transformTreeWithOperators = (node) => {
     traverseTreePostOrder(node, (child) => {
-      const {children} = child;
-      if (children) {
-        child.children = operators.reduce(transformChildren, children);
+      if (child.children) {
+        child.children = operators.reduce(transformChildren, child.children);
       }
     });
   };
 
-  const isColonNode = ({type, value}) =>
-      type === NODE_TYPE_LEAF &&
-      value === OPERATOR_ASSIGNMENT;
+  const assertNodeType = (node, expected) => {
+    if (node.type === expected) return true;
+    console.error(node);
+    throw new Error(`Expected node type '${expected}', but was '${node.type}'.`);
+  };
 
-  const isSpreadNode = ({type, value}) =>
-      type === NODE_TYPE_LEAF &&
-      spreadRegexp.test(value);
+  const isColonNode = (node) =>
+    assertNodeType(node, NODE_TYPE_LEAF) &&
+    node.value === OPERATOR_ASSIGNMENT;
 
-  const isNameNode = ({type, value}) =>
-      type === NODE_TYPE_LEAF &&
-      isValidName(value);
+  const isSpreadNode = (node) =>
+    assertNodeType(node, NODE_TYPE_LEAF) &&
+    spreadRegexp.test(value);
 
-  const transformTreeToPropTypes = (node) => {
-    traverseTreePostOrder(node, (child) => {
-      const {type, children} = child;
-      switch (type) {
-      case NODE_TYPE_ASSIGNMENT:
-        const [left, right] = children;
-        if (!isNameNode(left)) {
-          console.error(left);
-          throw new Error(`Invalid name node.`);
-        }
-        if (right.type === NODE_TYPE_LEAF) {
-          getType(right.value);
-          // TODO
-        }
-        break;
+  const isNameNode = (node) =>
+    assertNodeType(node, NODE_TYPE_LEAF) &&
+    isValidName(node.value);
+
+  const assertNameNode = (node) => {
+    if (isNameNode(node)) return true;
+    console.error(node);
+    throw new Error(`Invalid name node.`);
+  };
+
+  const assertSpreadableTypeName = (name) => {
+    if (namedPropTypes[name]) return true;
+    throw new Error(`Unknown type to spread. name=${name}`);
+  };
+
+  const isPropType = (node) => typeof node === 'function';
+
+  const reduceNameNode = (node) => {
+    assertNameNode(node);
+    return node;
+  };
+
+  const reduceNamedTypeNode = (node) => {
+    assertNameNode(node);
+    const {value} = node;
+
+    const propType = getType(value);
+    if (propType) return propType;
+
+    throw new Error(`Unknown type name. name=${value}`);
+  };
+
+  const reduceTypeNode = (node) => {
+    if (isPropType(node)) return node;
+
+    switch (node.type) {
+    case NODE_TYPE_LEAF:
+      return reduceNamedTypeNode(node);
+    case NODE_TYPE_SHAPE:
+      return PropTypes.shape(node.value);
+    default:
+      console.error(node);
+      throw new Error(`Unexpected type to reduce as type. ${node.type}`);
+    }
+  };
+
+  const reduceRequiredNode = (node) => {
+    assertNodeType(node, NODE_TYPE_REQUIRED);
+
+    const propType = reduceTypeNode(node.children[0]);
+    if (propType.isRequired) return propType.isRequired;
+
+    console.error(propType);
+    throw new Error(`PropType does not support 'isRequired'.`);
+  };
+
+  const reduceAssignmentNode = (node) => {
+    assertNodeType(node, NODE_TYPE_ASSIGNMENT);
+
+    const {
+      type,
+      children: [nameNode, valueNode],
+    } = node;
+
+    assertNameNode(nameNode);
+
+    return {
+      type,
+      name: nameNode.value,
+      value: reduceTypeNode(valueNode),
+    };
+  };
+
+  const reduceSpreadNode = (node) => {
+    assertNodeType(node, NODE_TYPE_SPREAD);
+
+    const {
+      type,
+      children: [nameNode],
+    } = node;
+
+    assertNameNode(nameNode);
+    assertSpreadableTypeName(nameNode.value);
+
+    return {
+      type,
+      value: namedPropTypes[nameNode.value],
+    };
+  };
+
+  const reduceUnionNode = (node) => {
+    assertNodeType(node, NODE_TYPE_UNION);
+
+    const [left, right] = node.children;
+
+    return PropTypes.oneOfType([
+      reduceTypeNode(left),
+      reduceTypeNode(right)
+    ]);
+  };
+
+  const reduceListTypeNode = (node) => {
+    // TODO could be enums.
+    assertNodeType(node, NODE_TYPE_LIST);
+
+    if (node.children.length !== 1) {
+      console.error(node);
+      throw new Error('List type should have only one child.');
+    }
+
+    const [typeNode] = node.children;
+
+    return PropTypes.arrayOf(reduceTypeNode(typeNode));
+  };
+
+  const reduceGroupNode = (node) => {
+    assertNodeType(node, NODE_TYPE_GROUP);
+
+    if (node.children.length !== 1) {
+      console.error(node);
+      throw new Error('Group type should have only one child.');
+    }
+
+    const [typeNode] = node.children;
+    return reduceTypeNode(typeNode);
+  };
+
+  const reduceShapeNode = (node) => {
+    assertNodeType(node, NODE_TYPE_SHAPE);
+
+    const {type, children} = node;
+    if (!children.length) {
+      console.error(node);
+      throw new Error('Empty shape.');
+    }
+
+    const shape = createCleanObject();
+
+    children.forEach((node) => {
+      const {type: childType, name, value} = node;
+      switch (childType) {
       case NODE_TYPE_SPREAD:
+        copy(shape, value);
         break;
-      case NODE_TYPE_REQUIRED:
+      case NODE_TYPE_ASSIGNMENT:
+        shape[name] = value;
         break;
-      case NODE_TYPE_UNION:
-        break;
-      case NODE_TYPE_LIST:
-        break;
-      case NODE_TYPE_SHAPE:
-        break;
-      case NODE_TYPE_GROUP:
-        break;
-      case NODE_TYPE_QUOTE:
-        break;
-      //case NODE_TYPE_LEAF:
       default:
+        console.error(node);
+        throw new Error(`Unexpected type inside shape. ${childType}`);
+      }
+    });
+
+    return {
+      type,
+      value: shape,
+    };
+  };
+
+  const reduceTreeToPropTypes = (root) => {
+    return reduceTreePostOrder(root, (node) => {
+      console.log(node.type, node.operator, node.value, node.children && node.children.length || 0);
+      switch (node.type) {
+      case NODE_TYPE_LEAF:
+        // All Leaves should be valid names at this point.
+        return reduceNameNode(node);
+      case NODE_TYPE_ASSIGNMENT:
+        return reduceAssignmentNode(node);
+      case NODE_TYPE_SPREAD:
+        return reduceSpreadNode(node);
+      case NODE_TYPE_REQUIRED:
+        return reduceRequiredNode(node);
+      case NODE_TYPE_UNION:
+        return reduceUnionNode(node);
+      case NODE_TYPE_LIST:
+        return reduceListTypeNode(node);
+      case NODE_TYPE_SHAPE:
+        return reduceShapeNode(node);
+      case NODE_TYPE_GROUP:
+        return reduceGroupNode(node);
+      case NODE_TYPE_QUOTE:
+        // TODO Support enums.
         break;
+      default:
+        console.error(node);
+        throw new Error(`Unknown node type. '${node.type}'`);
       }
     });
   };
@@ -737,12 +900,6 @@ export default (PropTypes, extension) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
 
     console.log('tokens', tokens.join(' '));
-    const node = buildTreeByGrouping(tokens);
-    console.log(JSON.stringify(node, null, '  '));
-    transformTreeWithOperators(node);
-    console.log(JSON.stringify(node, null, '  '));
-    const propTypesFromTree = transformTreeToPropTypes(node);
-    console.log(propTypesFromTree);
 
     let name;
     if (isValidName(tokens[0])) {
@@ -760,6 +917,21 @@ export default (PropTypes, extension) => {
     if (types[name] || tmpTypes[name]) {
       throw new Error(`'${name}' type is already defined.`);
     }
+
+    const node = buildTreeByGrouping(tokens);
+    transformTreeWithOperators(node);
+
+    if (node.children.length !== 1) {
+      throw new Error('Only one definition is allowed.');
+    }
+    const [shapeNode] = node.children;
+    assertNodeType(shapeNode, NODE_TYPE_SHAPE);
+
+    const propTypesFromTree = reduceTreeToPropTypes(shapeNode).value;
+    console.log(propTypesFromTree);
+
+    if (name) addPropTypes(name, propTypesFromTree);
+    return propTypesFromTree;
 
     const propTypes = parseShape(tokens.slice(1, tokens.length - 1));
 
