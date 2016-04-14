@@ -7,7 +7,7 @@ Don't you just hate writing PropTypes for React components?
 
 It uses GraphQL schema like syntax to define PropTypes in string.
 
-It also allows Type Composition via named definitions and spread operator `...`!
+It also allows Type Composition via named definitions and spread operator `...`.
 
 
 ### Install
