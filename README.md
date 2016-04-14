@@ -53,6 +53,7 @@ const propTypes = parsePropTypes(`{
   element: Element!
   message: Message!
   any: Any!
+  union: (String | Number)!
 }`);
 ```
 
@@ -82,6 +83,10 @@ const propTypes = {
   element: PropTypes.element.isRequired,
   message: PropTypes.instanceOf(Message).isRequired,
   any: PropTypes.any.isRequired,
+  union: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+  ]).isRequired,
 };
 ```
 How wonderful!
@@ -144,25 +149,18 @@ parsePropTypes(`{
 
 ```
 
-### Union and Enums
-Currently, Union and Enums are not supported.
+### Enums
+Currently, Enums are not supported.
 However, you can do this instead:
 ```javascript
 // Provide type extensions for this parser.
 const parsePropTypes = createPropTypesParser(PropTypes, {
   OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
-  OptionalUnion: PropTypes.oneOfType([
-    PropTypes.string,
-    PropTypes.number,
-    PropTypes.instanceOf(Message),
-  ]),
 });
 
 const propTypes = parsePropTypes(`{
   optionalEnumValue: OptionalEnum
   requiredEnumValue: OptionalEnum!
-  unionValue: OptionalUnion
-  arrayUnionValue: [OptionalUnion!]!
 }`);
 ```
 or
@@ -171,15 +169,8 @@ or
 const propTypes = parsePropTypes(`{
   optionalEnumValue: OptionalEnum
   requiredEnumValue: OptionalEnum!
-  unionValue: OptionalUnion
-  arrayUnionValue: [OptionalUnion!]!
 }`, {
   OptionalEnum: PropTypes.oneOf(['News', 'Photos']),
-  OptionalUnion: PropTypes.oneOfType([
-    PropTypes.string,
-    PropTypes.number,
-    PropTypes.instanceOf(Message),
-  ]),
 });
 ```
 
@@ -195,7 +186,6 @@ Take a look at the [source code](https://github.com/joonhocho/proptypes-parser/b
 
 
 ### TODO
- - Support Union: `value: (Number | String)!`
  - Support Enums: `value: ['News', 'Photos']`
  - More extensive validations
  - Babel plugin
