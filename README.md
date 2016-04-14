@@ -53,6 +53,7 @@ const propTypes = parsePropTypes(`{
   element: Element!
   message: Message!
   any: Any!
+  optionalUnion: String | Number | Boolean
   union: (String | Number)!
 }`);
 ```
@@ -83,6 +84,11 @@ const propTypes = {
   element: PropTypes.element.isRequired,
   message: PropTypes.instanceOf(Message).isRequired,
   any: PropTypes.any.isRequired,
+  optionalUnion: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+    PropTypes.bool,
+  ]),
   union: PropTypes.oneOfType([
     PropTypes.string,
     PropTypes.number,
