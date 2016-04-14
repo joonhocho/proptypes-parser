@@ -1,6 +1,6 @@
 {
   "name": "proptypes-parser",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "PropTypes parser / generator for React and React Native components with GraphQL-like syntax.",
   "main": "lib/index.js",
   "scripts": {

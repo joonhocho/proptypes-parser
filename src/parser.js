@@ -425,7 +425,7 @@ export default (PropTypes, extension) => {
       throw new Error('Empty shape.');
     }
 
-    const shape = createCleanObject();
+    const shape = {};
 
     children.forEach((node) => {
       const {type: childType, name, value} = node;
