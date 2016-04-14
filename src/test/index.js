@@ -321,23 +321,6 @@ describe('PropTypes', () => {
   it('should allow adding propTypes.', () => {
     const parser = createParser(PropTypes);
 
-    parser(`Car {
-      mediaType: [
-        (
-          String |
-          Number |
-          {
-            ...Team
-            name: Value! | String!
-            ...Car
-            array: [{name: (Number | String)!}]
-            ...Base
-          }
-        )!
-      ]!
-      union: ['News', 'Photos']
-    }`);
-
     assert.throws(() => {
       parser(`{ message: Message }`);
     }, /Message/i);
@@ -381,5 +364,49 @@ describe('PropTypes', () => {
     testPass(propTypesWithEnum.mediaType, 'News');
     testPass(propTypesWithEnum.mediaType, 'Photos');
     testFail(propTypesWithEnum.mediaType, 'Video');
+  });
+
+
+  it('should support union type.', () => {
+    const parser = createParser(PropTypes);
+
+    const propTypes = parser(`{
+      stringOrNumberOrNull: String | Number
+      stringOrNumber: String! | Number!
+      stringOrNumberGroup: (String | Number)!
+      stringOrNumberOrBoolean: (String | Number | Boolean)!
+      stringOrNumberOrBoolean2: ((String | Number)! | Boolean)!
+    }`);
+
+    testPass(propTypes.stringOrNumberOrNull, 'a');
+    testPass(propTypes.stringOrNumberOrNull, 1);
+    testPass(propTypes.stringOrNumberOrNull, null);
+    testFail(propTypes.stringOrNumberOrNull, true);
+
+    testPass(propTypes.stringOrNumber, 'a');
+    testPass(propTypes.stringOrNumber, 1);
+    testFail(propTypes.stringOrNumber, null);
+    testFail(propTypes.stringOrNumber, true);
+
+    testPass(propTypes.stringOrNumberGroup, 'a');
+    testPass(propTypes.stringOrNumberGroup, 1);
+    testFail(propTypes.stringOrNumberGroup, null);
+    testFail(propTypes.stringOrNumberGroup, true);
+
+    testPass(propTypes.stringOrNumberOrBoolean, 'a');
+    testPass(propTypes.stringOrNumberOrBoolean, 1);
+    testPass(propTypes.stringOrNumberOrBoolean, true);
+    testFail(propTypes.stringOrNumberOrBoolean, null);
+    testFail(propTypes.stringOrNumberOrBoolean, undefined);
+    testFail(propTypes.stringOrNumberOrBoolean, []);
+    testFail(propTypes.stringOrNumberOrBoolean, {});
+
+    testPass(propTypes.stringOrNumberOrBoolean2, 'a');
+    testPass(propTypes.stringOrNumberOrBoolean2, 1);
+    testPass(propTypes.stringOrNumberOrBoolean2, true);
+    testFail(propTypes.stringOrNumberOrBoolean2, null);
+    testFail(propTypes.stringOrNumberOrBoolean2, undefined);
+    testFail(propTypes.stringOrNumberOrBoolean2, []);
+    testFail(propTypes.stringOrNumberOrBoolean2, {});
   });
 });

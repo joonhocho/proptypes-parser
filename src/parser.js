@@ -1,14 +1,3 @@
-const STATE_NEED_NAME = 'need_name';
-const STATE_NEED_NAME_COLON = 'need_name_colon';
-const STATE_NEED_TYPE = 'need_type';
-const STATE_SEEN_TYPE = 'seen_type';
-
-
-const OPERATOR_ASSIGNMENT = ':';
-const OPERATOR_REQUIRED = '!';
-const OPERATOR_UNION = '|';
-const OPERATOR_SPREAD = '...';
-
 const CHAR_LIST_OPEN = '[';
 const CHAR_LIST_CLOSE = ']';
 const CHAR_SHAPE_OPEN = '{';
@@ -51,10 +40,71 @@ const GROUPS = {
   },
 };
 
+const OPERATOR_ASSIGNMENT = ':';
+const OPERATOR_REQUIRED = '!';
+const OPERATOR_UNION = '|';
+const OPERATOR_SPREAD = '...';
+
+const createLeafNode = (value) => ({
+  type: NODE_TYPE_LEAF,
+  value,
+});
+
+const createRequiredNode = (value) => ({
+  type: NODE_TYPE_REQUIRED,
+  value: OPERATOR_REQUIRED,
+  children: [value],
+});
+
+const createSpreadNode = (node) => ({
+  type: NODE_TYPE_SPREAD,
+  value: OPERATOR_SPREAD,
+  children: [node],
+});
+
+const createUnionNode = (left, right) => ({
+  type: NODE_TYPE_UNION,
+  value: OPERATOR_UNION,
+  children: [left, right],
+});
+
+const createAssignmentNode = (name, value) => ({
+  type: NODE_TYPE_ASSIGNMENT,
+  value: OPERATOR_ASSIGNMENT,
+  children: [name, value],
+});
+
+const OPERATOR_TYPE_PREFIX = 'PREFIX';
+const OPERATOR_TYPE_POSTFIX = 'POSTFIX';
+const OPERATOR_TYPE_BINARY = 'BINARY';
+
+const operators = [
+  {
+    operator: OPERATOR_REQUIRED,
+    type: OPERATOR_TYPE_POSTFIX,
+    build: (left) => createRequiredNode(left),
+  },
+  {
+    operator: OPERATOR_SPREAD,
+    type: OPERATOR_TYPE_PREFIX,
+    build: (right) => createSpreadNode(right),
+  },
+  {
+    operator: OPERATOR_UNION,
+    type: OPERATOR_TYPE_BINARY,
+    build: (left, right) => createUnionNode(left, right),
+  },
+  {
+    operator: OPERATOR_ASSIGNMENT,
+    type: OPERATOR_TYPE_BINARY,
+    build: (left, right) => createAssignmentNode(left, right),
+  },
+];
+
 const punctuatorRegexp = /([\!\(\)\:\[\]\{\}\'\,]|\.\.\.)/g;
+
 // https://facebook.github.io/graphql/#sec-Names
 const nameRegexp = /[_A-Za-z][_0-9A-Za-z]*/;
-const spreadRegexp = /^\.\.\./;
 
 const isValidName = (name) => nameRegexp.test(name);
 
@@ -86,6 +136,115 @@ const getInnerTokens = (tokens, opening, closing, start = 0) => {
     }
   }
   throw new Error(`No closing char is found. char=${closing}`);
+};
+
+const buildTreeByGrouping = (tokens) => {
+  const node = {
+    children: [],
+  };
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    let child;
+    if (GROUPS[token]) {
+      const group = GROUPS[token];
+      const innerTokens = getInnerTokens(tokens, token, group.closing, i + 1);
+      child = {
+        ...group,
+        ...buildTreeByGrouping(innerTokens),
+      };
+      i += innerTokens.length + 1;
+    } else {
+      child = createLeafNode(token);
+    }
+    node.children.push(child);
+  }
+  return node;
+};
+
+const transformChildren = (children, {operator, type, build}) => {
+  const newChildren = children.slice();
+  for (let i = 0; i < newChildren.length; i++) {
+    const child = newChildren[i];
+    if (child.value === operator) {
+      let left, right;
+      switch (type) {
+      case OPERATOR_TYPE_PREFIX:
+        right = newChildren[i + 1];
+        if (!right) {
+          throw new Error(`Prefix unary operator '${operator}' requires right side argument.`);
+        }
+        newChildren.splice(i, 2, build(right));
+        break;
+      case OPERATOR_TYPE_POSTFIX:
+        left = newChildren[i - 1];
+        if (!left) {
+          throw new Error(`Prefix unary operator '${operator}' requires left side argument.`);
+        }
+        newChildren.splice(i - 1, 2, build(left));
+        i--;
+        break;
+      case OPERATOR_TYPE_BINARY:
+        left = newChildren[i - 1];
+        if (!left) {
+          throw new Error(`Binary operator '${operator}' requires left side argument.`);
+        }
+        right = newChildren[i + 1];
+        if (!right) {
+          throw new Error(`Binary operator '${operator}' requires right side argument.`);
+        }
+        newChildren.splice(i - 1, 3, build(left, right));
+        i--;
+        break;
+      }
+    }
+  }
+  return newChildren;
+};
+
+const traverseTreePostOrder = (node, fn) => {
+  const {children} = node;
+  if (children) children.forEach((child) => { traverseTreePostOrder(child, fn); });
+  fn(node);
+};
+
+const reduceTreePostOrder = (node, fn) => {
+  const newNode = {...node};
+  if (node.children) {
+    newNode.children = node.children.map((child) => reduceTreePostOrder(child, fn)).filter((x) => x);
+  }
+  return fn(newNode);
+};
+
+const transformTreeWithOperators = (node) => {
+  traverseTreePostOrder(node, (child) => {
+    if (child.children) {
+      child.children = operators.reduce(transformChildren, child.children);
+    }
+  });
+};
+
+const assertNodeType = (node, expected) => {
+  if (node.type === expected) return true;
+  console.error(node);
+  throw new Error(`Expected node type '${expected}', but was '${node.type}'.`);
+};
+
+const assertNameNode = (node) => {
+  assertNodeType(node, NODE_TYPE_LEAF);
+  if (isValidName(node.value)) return true;
+  console.error(node);
+  throw new Error('Invalid name node.');
+};
+
+const isPropType = (node) => typeof node === 'function';
+
+const isOptionalPropType = (type) => isPropType(type) && Boolean(type.isRequired);
+
+const isRequiredPropType = (type) => isPropType(type) && !type.isRequired;
+
+const reduceNameNode = (node) => {
+  assertNameNode(node);
+  return node;
 };
 
 
@@ -144,257 +303,9 @@ export default (PropTypes, extension) => {
     throw new Error(`Expected valid named type. Instead, saw '${name}'.`);
   };
 
-
-  const createLeafNode = (value) => ({
-    type: NODE_TYPE_LEAF,
-    value,
-  });
-
-  const createRequiredNode = (value) => ({
-    type: NODE_TYPE_REQUIRED,
-    value: OPERATOR_REQUIRED,
-    children: [value],
-  });
-
-  const createSpreadNode = (node) => ({
-    type: NODE_TYPE_SPREAD,
-    value: OPERATOR_SPREAD,
-    children: [node],
-  });
-
-  const createUnionNode = (left, right) => ({
-    type: NODE_TYPE_UNION,
-    value: OPERATOR_UNION,
-    children: [left, right],
-  });
-
-  const createAssignmentNode = (name, value) => ({
-    type: NODE_TYPE_ASSIGNMENT,
-    value: OPERATOR_ASSIGNMENT,
-    children: [name, value],
-  });
-
-  const OPERATOR_TYPE_PREFIX = 'PREFIX';
-  const OPERATOR_TYPE_POSTFIX = 'POSTFIX';
-  const OPERATOR_TYPE_BINARY = 'BINARY';
-
-  const operators = [
-    {
-      operator: OPERATOR_REQUIRED,
-      type: OPERATOR_TYPE_POSTFIX,
-      build: (left) => createRequiredNode(left),
-    },
-    {
-      operator: OPERATOR_SPREAD,
-      type: OPERATOR_TYPE_PREFIX,
-      build: (right) => createSpreadNode(right),
-    },
-    {
-      operator: OPERATOR_UNION,
-      type: OPERATOR_TYPE_BINARY,
-      build: (left, right) => createUnionNode(left, right),
-    },
-    {
-      operator: OPERATOR_ASSIGNMENT,
-      type: OPERATOR_TYPE_BINARY,
-      build: (left, right) => createAssignmentNode(left, right),
-    },
-  ];
-
-  const splitAssignments = (children) => {
-    const assignments = [];
-
-    let state = STATE_NEED_NAME;
-    let nameNode = null;
-    let operatorNode = null;
-    let valueNodes = [];
-
-    for (let i = 0; i < children.length; i++) {
-      const node = children[i];
-      const {type, value} = node;
-
-      switch (state) {
-      case STATE_NEED_NAME:
-        if (type !== NODE_TYPE_LEAF) {
-          console.error(node);
-          throw new Error('Expected property name.');
-        }
-        if (isSpreadNode(node)) {
-          assignments.push(
-            createSpreadNode(
-              createLeafNode(value.substring(3))
-            )
-          );
-
-          state = STATE_NEED_NAME;
-        } else {
-          nameNode = node;
-          state = STATE_NEED_NAME_COLON;
-        }
-        break;
-      case STATE_NEED_NAME_COLON:
-        if (!isColonNode(node)) {
-          console.error(node, nameNode, operatorNode, valueNodes);
-          throw new Error(`Expected assignment operator, '${OPERATOR_ASSIGNMENT}'`);
-        }
-        operatorNode = node;
-        state = STATE_NEED_TYPE;
-        break;
-      case STATE_NEED_TYPE:
-        if (isColonNode(node)) {
-          if (valueNodes.length < 2) {
-            console.error(node, nameNode, operatorNode, valueNodes);
-            throw new Error(`Unexpected assignment operator, '${OPERATOR_ASSIGNMENT}'`);
-          }
-
-          const prevNameNode = nameNode;
-
-          nameNode = valueNodes.pop();
-          if (nameNode.type !== NODE_TYPE_LEAF) {
-            console.error(node, nameNode, operatorNode, valueNodes);
-            throw new Error('Expected property name before colon.');
-          }
-
-          assignments.push(createAssignmentNode(prevNameNode, valueNodes));
-
-          operatorNode = node;
-          valueNodes = [];
-          state = STATE_NEED_TYPE;
-        } else if (isSpreadNode(node)) {
-          if (!valueNodes.length) {
-            throw new Error(`Expected type, but saw spread operator. name=${nameNode.value}`);
-          }
-
-          assignments.push(
-            createAssignmentNode(nameNode, valueNodes),
-            createSpreadNode(
-              createLeafNode(value.substring(3))
-            )
-          );
-
-          nameNode = null;
-          operatorNode = null;
-          valueNodes = [];
-          state = STATE_NEED_NAME;
-        } else {
-          valueNodes.push(node);
-        }
-        break;
-      }
-    }
-
-    if (nameNode) {
-      if (operatorNode) {
-        if (valueNodes.length) {
-          assignments.push(createAssignmentNode(nameNode, valueNodes));
-        } else {
-          throw new Error(`Expected type after colon. name=${nameNode.value}`);
-        }
-      } else {
-        throw new Error(`Unexpected name. name=${nameNode.value}`);
-      }
-    }
-
-    return assignments;
-  };
-
-
-  const transformChildren = (children, {operator, type, build}) => {
-    const newChildren = children.slice();
-    for (let i = 0; i < newChildren.length; i++) {
-      const child = newChildren[i];
-      if (child.value === operator) {
-        let left, right;
-        switch (type) {
-        case OPERATOR_TYPE_PREFIX:
-          right = newChildren[i + 1];
-          if (!right) {
-            throw new Error(`Prefix unary operator '${operator}' requires right side argument.`);
-          }
-          newChildren.splice(i, 2, build(right));
-          break;
-        case OPERATOR_TYPE_POSTFIX:
-          left = newChildren[i - 1];
-          if (!left) {
-            throw new Error(`Prefix unary operator '${operator}' requires left side argument.`);
-          }
-          newChildren.splice(i - 1, 2, build(left));
-          i--;
-          break;
-        case OPERATOR_TYPE_BINARY:
-          left = newChildren[i - 1];
-          if (!left) {
-            throw new Error(`Binary operator '${operator}' requires left side argument.`);
-          }
-          right = newChildren[i + 1];
-          if (!right) {
-            throw new Error(`Binary operator '${operator}' requires right side argument.`);
-          }
-          newChildren.splice(i - 1, 3, build(left, right));
-          i--;
-          break;
-        }
-      }
-    }
-    return newChildren;
-  };
-
-  const traverseTreePostOrder = (node, fn) => {
-    const {children} = node;
-    if (children) children.forEach((child) => { traverseTreePostOrder(child, fn); });
-    fn(node);
-  };
-
-  const reduceTreePostOrder = (node, fn) => {
-    const newNode = {...node};
-    if (node.children) {
-      newNode.children = node.children.map((child) => reduceTreePostOrder(child, fn)).filter((x) => x);
-    }
-    return fn(newNode);
-  };
-
-  const transformTreeWithOperators = (node) => {
-    traverseTreePostOrder(node, (child) => {
-      if (child.children) {
-        child.children = operators.reduce(transformChildren, child.children);
-      }
-    });
-  };
-
-  const assertNodeType = (node, expected) => {
-    if (node.type === expected) return true;
-    console.error(node);
-    throw new Error(`Expected node type '${expected}', but was '${node.type}'.`);
-  };
-
-  const isColonNode = (node) =>
-    assertNodeType(node, NODE_TYPE_LEAF) &&
-    node.value === OPERATOR_ASSIGNMENT;
-
-  const isSpreadNode = (node) =>
-    assertNodeType(node, NODE_TYPE_LEAF) &&
-    spreadRegexp.test(value);
-
-  const isNameNode = (node) =>
-    assertNodeType(node, NODE_TYPE_LEAF) &&
-    isValidName(node.value);
-
-  const assertNameNode = (node) => {
-    if (isNameNode(node)) return true;
-    console.error(node);
-    throw new Error(`Invalid name node.`);
-  };
-
   const assertSpreadableTypeName = (name) => {
     if (namedPropTypes[name]) return true;
     throw new Error(`Unknown type to spread. name=${name}`);
-  };
-
-  const isPropType = (node) => typeof node === 'function';
-
-  const reduceNameNode = (node) => {
-    assertNameNode(node);
-    return node;
   };
 
   const reduceNamedTypeNode = (node) => {
@@ -425,7 +336,7 @@ export default (PropTypes, extension) => {
     assertNodeType(node, NODE_TYPE_REQUIRED);
 
     const propType = reduceTypeNode(node.children[0]);
-    if (propType.isRequired) return propType.isRequired;
+    if (isOptionalPropType(propType)) return propType.isRequired;
 
     console.error(propType);
     throw new Error(`PropType does not support 'isRequired'.`);
@@ -469,11 +380,14 @@ export default (PropTypes, extension) => {
     assertNodeType(node, NODE_TYPE_UNION);
 
     const [left, right] = node.children;
+    const isRequired = isRequiredPropType(left) && isRequiredPropType(right);
 
-    return PropTypes.oneOfType([
+    const propType = PropTypes.oneOfType([
       reduceTypeNode(left),
-      reduceTypeNode(right)
+      reduceTypeNode(right),
     ]);
+
+    return isRequired ? propType.isRequired : propType;
   };
 
   const reduceListTypeNode = (node) => {
@@ -536,7 +450,6 @@ export default (PropTypes, extension) => {
 
   const reduceTreeToPropTypes = (root) => {
     return reduceTreePostOrder(root, (node) => {
-      console.log(node.type, node.operator, node.value, node.children && node.children.length || 0);
       switch (node.type) {
       case NODE_TYPE_LEAF:
         // All Leaves should be valid names at this point.
@@ -565,341 +478,8 @@ export default (PropTypes, extension) => {
     });
   };
 
-  const buildTreeByGrouping = (tokens) => {
-    const node = {
-      children: [],
-    };
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-      let child;
-      if (GROUPS[token]) {
-        const group = GROUPS[token];
-        const innerTokens = getInnerTokens(tokens, token, group.closing, i + 1);
-        child = {
-          ...group,
-          ...buildTreeByGrouping(innerTokens),
-        };
-        if (token === CHAR_SHAPE_OPEN) {
-          //child.children = splitAssignments(child.children);
-        }
-        i += innerTokens.length + 1;
-      } else {
-        let lastChild;
-        switch (token) {
-          /*
-        case OPERATOR_ASSIGNMENT = ':':
-          lastChild = node.children.pop();
-          if (!lastChild || lastChild.type !== NODE_TYPE_LEAF) {
-            throw new Error(`Name is required before '${OPERATOR_ASSIGNMENT}'`);
-          }
-          const {value, nextIndex} = buildAssignment(tokens.slice(i + 1);
-          child = {
-            type: NODE_TYPE_ASSIGNMENT,
-            token,
-            left: lastChild,
-            right: value,
-          };
-          i = nextIndex;
-          break;
-        case OPERATOR_REQUIRED = '!':
-          lastChild = node.children.pop();
-          child = {
-            type: NODE_TYPE_REQUIRED,
-            token,
-            left: lastChild,
-          };
-          break;
-        case OPERATOR_UNION = '|':
-          lastChild = node.children.pop();
-          if (i >= tokens.length - 1) {
-            throw new Error(`Union needs another type.`);
-          }
-          child = {
-            type: NODE_TYPE_ASSIGNMENT,
-            token,
-            left: lastChild,
-            right: buildTreeByGrouping(tokens.slice(i + 1)),
-          };
-          i = tokens.length;
-          break;
-          */
-        default:
-          child = createLeafNode(token);
-        }
-      }
-      node.children.push(child);
-    }
-    return node;
-  };
-
-
-  const parseType = (tokens) => {
-    const isRequired = last(tokens) === OPERATOR_REQUIRED;
-    if (isRequired) {
-      tokens = tokens.slice(0, tokens.length - 1);
-    }
-
-    let innerTokens;
-    let type;
-    switch (tokens[0]) {
-    case CHAR_LIST_OPEN:
-      if (last(tokens) !== CHAR_LIST_CLOSE) {
-        throw new Error(`Expected to end with ${CHAR_LIST_CLOSE}. Instead, saw '${last(tokens)}'. ${tokens}`);
-      }
-
-      innerTokens = getInnerTokens(tokens, CHAR_LIST_OPEN, CHAR_LIST_CLOSE, 1);
-      if (innerTokens.length + 2 !== tokens.length) {
-        throw new Error(`Invalid wrapping with ${CHAR_LIST_OPEN} ${CHAR_LIST_CLOSE}. ${tokens}`);
-      }
-
-      type = PropTypes.arrayOf(parseType(innerTokens));
-      break;
-
-    case CHAR_SHAPE_OPEN:
-      if (last(tokens) !== CHAR_SHAPE_CLOSE) {
-        throw new Error(`Expected to end with ${CHAR_SHAPE_CLOSE}. Instead, saw '${last(tokens)}'. ${tokens}`);
-      }
-
-      innerTokens = getInnerTokens(tokens, CHAR_SHAPE_OPEN, CHAR_SHAPE_CLOSE, 1);
-      if (innerTokens.length + 2 !== tokens.length) {
-        throw new Error(`Invalid wrapping with ${CHAR_SHAPE_OPEN} ${CHAR_SHAPE_CLOSE}. ${tokens}`);
-      }
-
-      type = PropTypes.shape(parseShape(innerTokens));
-      break;
-
-    default:
-      if (tokens.length !== 1) {
-        throw new Error(`Invalid type name. ${tokens}`);
-      }
-      type = getType(tokens[0]);
-      break;
-    }
-
-    if (isRequired && !type.isRequired) {
-      throw new Error(`Type does not support isRequired. ${tokens}`);
-    }
-    return isRequired ? type.isRequired : type;
-  };
-
-
-  const parseShapeNode = ({children}) => {
-    if (!children.length) throw new Error('Empty shape.');
-
-    const shape = {};
-
-    let state = STATE_NEED_NAME;
-    let name = null;
-    for (let i = 0; i < children.length; i++) {
-      const {type, value} = children[i];
-      let innerTokens;
-
-      switch (state) {
-
-      case STATE_NEED_NAME:
-        if (type !== NODE_TYPE_LEAF) {
-          throw new Error(`Expected valid name. Instead, saw '${type}' node.`);
-        }
-
-        if (spreadRegexp.test(value)) {
-          name = value.substring(3);
-          if (!namedPropTypes[name]) {
-            throw new Error(`Unknown type to spread. name=${name}`);
-          }
-
-          copy(shape, namedPropTypes[name]);
-          state = STATE_NEED_NAME;
-        } else {
-          if (!isValidName(value)) {
-            throw new Error(`Expected valid name. Instead, saw '${value}'.`);
-          }
-
-          name = value;
-          state = STATE_NEED_NAME_COLON;
-        }
-        break;
-
-      case STATE_NEED_NAME_COLON:
-        if (value !== OPERATOR_ASSIGNMENT) {
-          throw new Error(`Expected colon after name='${name}'. Instead, saw '${value}'.`);
-        }
-        state = STATE_NEED_TYPE;
-        break;
-
-      case STATE_NEED_TYPE:
-        const NODE_TYPE_LEAF = 'LEAF';
-        const NODE_TYPE_LIST = 'LIST';
-        const NODE_TYPE_SHAPE = 'SHAPE';
-        const NODE_TYPE_GROUP = 'GROUP';
-        const NODE_TYPE_QUOTE = 'QUOTE';
-        switch (type) {
-        case CHAR_LIST_OPEN:
-          // List / PropTypes.arrayOf
-          // Enum / PropTypes.oneOf
-          innerTokens = getInnerTokens(tokens, CHAR_LIST_OPEN, CHAR_LIST_CLOSE, i + 1);
-          shape[name] = PropTypes.arrayOf(parseType(innerTokens));
-          i += innerTokens.length + 1;
-          break;
-
-        case CHAR_SHAPE_OPEN:
-          // Object / PropTypes.object / PropTypes.objectOf
-          innerTokens = getInnerTokens(tokens, CHAR_SHAPE_OPEN, CHAR_SHAPE_CLOSE, i + 1);
-          shape[name] = PropTypes.shape(parseShape(innerTokens));
-          i += innerTokens.length + 1;
-          break;
-
-        default:
-          shape[name] = getType(value);
-          break;
-        }
-
-        state = STATE_SEEN_TYPE;
-        break;
-
-      case STATE_SEEN_TYPE:
-        switch (value) {
-        case OPERATOR_REQUIRED:
-          // Non-Null / PropTypes.isRequired
-          if (!shape[name].isRequired) {
-            throw new Error(`Type does support isRequired. name=${name}`);
-          }
-          shape[name] = shape[name].isRequired;
-          state = STATE_NEED_NAME;
-          break;
-
-        /*
-        TODO: Support Union
-        case '|':
-          // Union / PropTypes.oneOfType
-          break;
-        */
-
-        default:
-          state = STATE_NEED_NAME;
-          i--;
-          break;
-        }
-        break;
-
-      default:
-        throw new Error(`Unknown state. state=${state}`);
-      }
-    }
-
-    if (state === STATE_NEED_NAME_COLON || state === STATE_NEED_TYPE) {
-      throw new Error(`Incomplete shape. ${tokens}`);
-    }
-
-    return shape;
-  };
-
-
-  const parseShape = (tokens) => {
-    if (!tokens.length) throw new Error('Empty shape.');
-
-    const shape = {};
-
-    let state = STATE_NEED_NAME;
-    let name = null;
-    for (let i = 0; i < tokens.length; i++) {
-      const value = tokens[i];
-      let innerTokens;
-
-      switch (state) {
-
-      case STATE_NEED_NAME:
-        if (spreadRegexp.test(value)) {
-          name = value.substring(3);
-          if (!namedPropTypes[name]) {
-            throw new Error(`Unknown type to spread. name=${name}`);
-          }
-
-          copy(shape, namedPropTypes[name]);
-          state = STATE_NEED_NAME;
-        } else {
-          if (!isValidName(value)) {
-            throw new Error(`Expected valid name. Instead, saw '${value}'.`);
-          }
-
-          name = value;
-          state = STATE_NEED_NAME_COLON;
-        }
-        break;
-
-      case STATE_NEED_NAME_COLON:
-        if (value !== OPERATOR_ASSIGNMENT) {
-          throw new Error(`Expected colon after name='${name}'. Instead, saw '${value}'.`);
-        }
-        state = STATE_NEED_TYPE;
-        break;
-
-      case STATE_NEED_TYPE:
-        switch (value) {
-        case CHAR_LIST_OPEN:
-          // List / PropTypes.arrayOf
-          // Enum / PropTypes.oneOf
-          innerTokens = getInnerTokens(tokens, CHAR_LIST_OPEN, CHAR_LIST_CLOSE, i + 1);
-          shape[name] = PropTypes.arrayOf(parseType(innerTokens));
-          i += innerTokens.length + 1;
-          break;
-
-        case CHAR_SHAPE_OPEN:
-          // Object / PropTypes.object / PropTypes.objectOf
-          innerTokens = getInnerTokens(tokens, CHAR_SHAPE_OPEN, CHAR_SHAPE_CLOSE, i + 1);
-          shape[name] = PropTypes.shape(parseShape(innerTokens));
-          i += innerTokens.length + 1;
-          break;
-
-        default:
-          shape[name] = getType(value);
-          break;
-        }
-
-        state = STATE_SEEN_TYPE;
-        break;
-
-      case STATE_SEEN_TYPE:
-        switch (value) {
-        case OPERATOR_REQUIRED:
-          // Non-Null / PropTypes.isRequired
-          if (!shape[name].isRequired) {
-            throw new Error(`Type does support isRequired. name=${name}`);
-          }
-          shape[name] = shape[name].isRequired;
-          state = STATE_NEED_NAME;
-          break;
-
-        /*
-        TODO: Support Union
-        case '|':
-          // Union / PropTypes.oneOfType
-          break;
-        */
-
-        default:
-          state = STATE_NEED_NAME;
-          i--;
-          break;
-        }
-        break;
-
-      default:
-        throw new Error(`Unknown state. state=${state}`);
-      }
-    }
-
-    if (state === STATE_NEED_NAME_COLON || state === STATE_NEED_TYPE) {
-      throw new Error(`Incomplete shape. ${tokens}`);
-    }
-
-    return shape;
-  };
-
-
   const parser = (string, typeOverrides) => {
     let tokens = string.replace(punctuatorRegexp, ' $1 ').split(/[\n\s,;]+/g).filter((x) => x);
-
-    console.log('tokens', tokens.join(' '));
 
     let name;
     if (isValidName(tokens[0])) {
@@ -928,16 +508,9 @@ export default (PropTypes, extension) => {
     assertNodeType(shapeNode, NODE_TYPE_SHAPE);
 
     const propTypesFromTree = reduceTreeToPropTypes(shapeNode).value;
-    console.log(propTypesFromTree);
 
     if (name) addPropTypes(name, propTypesFromTree);
     return propTypesFromTree;
-
-    const propTypes = parseShape(tokens.slice(1, tokens.length - 1));
-
-    if (name) addPropTypes(name, propTypes);
-
-    return propTypes;
   };
 
   parser.getType = (name) => types[name] || null;
@@ -948,7 +521,8 @@ export default (PropTypes, extension) => {
     if (types[name]) {
       throw new Error(`'${name}' type is already defined.`);
     }
-    if (type.constructor === Object) {
+    if (type.constructor === Object ||
+      (type && typeof type === 'object' && !type.constructor)) {
       addPropTypes(name, type);
     } else {
       types[name] = maybeConvertClassToType(type);
