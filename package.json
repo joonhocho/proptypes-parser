@@ -4,8 +4,8 @@
   "description": "PropTypes parser / generator for React and React Native components with GraphQL-like syntax.",
   "main": "lib/index.js",
   "scripts": {
-    "babel": "babel src --out-dir lib",
-    "babel-watch": "babel src --watch --out-dir lib",
+    "babel": "BABEL_ENV=babel babel src --out-dir lib",
+    "babel-watch": "BABEL_ENV=babel babel src --watch --out-dir lib",
     "start": "npm run babel && npm run test",
     "test": "mocha lib/test/**/*.js",
     "test-watch": "mocha --watch lib/test/**/*.js",
