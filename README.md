@@ -1,4 +1,10 @@
 # proptypes-parser
+[![Build Status](https://travis-ci.org/joonhocho/proptypes-parser.svg?branch=master)](https://travis-ci.org/joonhocho/proptypes-parser)
+[![Coverage Status](https://coveralls.io/repos/github/joonhocho/proptypes-parser/badge.svg?branch=master)](https://coveralls.io/github/joonhocho/proptypes-parser?branch=master)
+[![npm version](https://badge.fury.io/js/proptypes-parser.svg)](https://badge.fury.io/js/proptypes-parser)
+[![Dependency Status](https://david-dm.org/joonhocho/proptypes-parser.svg)](https://david-dm.org/joonhocho/proptypes-parser)
+[![License](http://img.shields.io/:license-mit-blue.svg)](http://doge.mit-license.org)
+
 PropTypes parser / generator for React and React Native components with GraphQL-like syntax.
 
 Don't you just hate writing PropTypes for React components?

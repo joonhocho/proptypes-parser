@@ -1,4 +1,4 @@
-import createParser from '../index';
+import createParser from '../lib';
 import {PropTypes} from 'react';
 
 const assert = require('assert');
