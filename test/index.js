@@ -1,25 +1,54 @@
-import createParser from '../lib';
-import {PropTypes} from 'react';
+import {describe, it} from 'mocha';
+import {expect} from 'chai';
+import createParser, {
+  PropTypes,
+  parsePropTypes as defaultParser,
+  PT as defaultPT,
+} from '../lib';
 
-const assert = require('assert');
 
 const log = (value) => console.log(JSON.stringify(value, null, '  '));
 
 const testPass = (propType, value) => {
-  assert.equal(
-    null,
-    propType({testProp: value}, 'testProp')
-  );
+  expect(propType({testProp: value}, 'testProp')).to.be.null;
 };
 
 const testFail = (propType, value) => {
-  assert.equal(
-    true,
-    propType({testProp: value}, 'testProp') instanceof Error
-  );
+  expect(propType({testProp: value}, 'testProp')).to.be.an.instanceof(Error);
 };
 
+
 describe('PropTypes', () => {
+  it('should provide default parsePropTypes.', () => {
+    const propTypes = defaultParser(`{
+      number: Number
+      string: String!
+      boolean: Boolean
+    }`);
+
+    expect(propTypes.number).to.equal(PropTypes.number);
+
+    expect(propTypes.string).to.equal(PropTypes.string.isRequired);
+
+    expect(propTypes.boolean).to.equal(PropTypes.bool);
+  });
+
+
+  it('should provide default PT.', () => {
+    const propTypes = defaultPT`{
+      number: Number
+      string: String!
+      boolean: Boolean
+    }`;
+
+    expect(propTypes.number).to.equal(PropTypes.number);
+
+    expect(propTypes.string).to.equal(PropTypes.string.isRequired);
+
+    expect(propTypes.boolean).to.equal(PropTypes.bool);
+  });
+
+
   it('should successfully parse and return valid propTypes.', () => {
     class Message {}
 
@@ -45,20 +74,20 @@ describe('PropTypes', () => {
       any: Any!
     }`);
 
-    assert.equal(propTypes.number, PropTypes.number);
+    expect(propTypes.number).to.equal(PropTypes.number);
 
-    assert.equal(propTypes.string, PropTypes.string.isRequired);
+    expect(propTypes.string).to.equal(PropTypes.string.isRequired);
 
-    assert.equal(propTypes.boolean, PropTypes.bool);
+    expect(propTypes.boolean).to.equal(PropTypes.bool);
 
-    assert.equal(propTypes.function, PropTypes.func.isRequired);
+    expect(propTypes.function).to.equal(PropTypes.func.isRequired);
 
     testPass(propTypes.date, new Date());
     testFail(propTypes.date, null);
     testFail(propTypes.date, Date);
     testFail(propTypes.date, 1);
 
-    assert.equal(propTypes.object, PropTypes.object.isRequired);
+    expect(propTypes.object).to.equal(PropTypes.object.isRequired);
 
     testPass(propTypes.shape, {
       nested: 3,
@@ -100,15 +129,15 @@ describe('PropTypes', () => {
     testPass(propTypes.arrayOfObjects, null);
     testFail(propTypes.arrayOfObjects, [null]);
 
-    assert.equal(propTypes.node, PropTypes.node);
-    assert.equal(propTypes.element, PropTypes.element.isRequired);
+    expect(propTypes.node).to.equal(PropTypes.node);
+    expect(propTypes.element).to.equal(PropTypes.element.isRequired);
 
     testPass(propTypes.message, new Message());
     testFail(propTypes.message, null);
     testFail(propTypes.message, Message);
     testFail(propTypes.message, new Date());
 
-    assert.equal(propTypes.any, PropTypes.any.isRequired);
+    expect(propTypes.any).to.equal(PropTypes.any.isRequired);
   });
 
 
@@ -135,7 +164,7 @@ describe('PropTypes', () => {
     testFail(propTypes.date, new Date());
 
     testPass(propTypes.element, new LocalElement());
-    assert.notEqual(propTypes.element, PropTypes.element);
+    expect(propTypes.element).to.not.equal(PropTypes.element);
 
     testFail(propTypes.message, new Message());
     testPass(propTypes.message, new LocalMessage());
@@ -193,17 +222,17 @@ describe('PropTypes', () => {
       }
     `);
 
-    assert.equal(propTypes, parser.getPropTypes('Car'));
+    expect(propTypes).to.equal(parser.getPropTypes('Car'));
 
-    assert.equal(propTypes.year, PropTypes.number.isRequired);
-    assert.equal(propTypes.model, PropTypes.string.isRequired);
+    expect(propTypes.year).to.equal(PropTypes.number.isRequired);
+    expect(propTypes.model).to.equal(PropTypes.string.isRequired);
   });
 
 
   it('should not allow name collisions.', () => {
     const parser = createParser(PropTypes);
 
-    assert.throws(() => {
+    expect(() => {
       // Cannot override default type, String.
       const propTypes = parser(`
         String {
@@ -211,7 +240,7 @@ describe('PropTypes', () => {
           model: String!
         }
       `);
-    }, /already defined/i);
+    }).to.throw(/already defined/i);
 
     const propTypes = parser(`
       Car {
@@ -220,7 +249,7 @@ describe('PropTypes', () => {
       }
     `);
 
-    assert.throws(() => {
+    expect(() => {
       // Cannot override previously defined, Car.
       const propTypes = parser(`
         Car {
@@ -229,7 +258,7 @@ describe('PropTypes', () => {
           wheelCount: Number!
         }
       `);
-    }, /already defined/i);
+    }).to.throw(/already defined/i);
   });
 
 
@@ -262,7 +291,7 @@ describe('PropTypes', () => {
   it('should allow composition with spread operator.', () => {
     const parser = createParser(PropTypes);
 
-    assert.throws(() => {
+    expect(() => {
       // Cannot spread unknown type.
       const carWithMakePropTypes = parser(`
         CarWithMake {
@@ -270,7 +299,7 @@ describe('PropTypes', () => {
           make: String!
         }
       `);
-    }, /unknown type/i);
+    }).to.throw(/unknown type/i);
 
     const carPropTypes = parser(`
       Car {
@@ -287,14 +316,14 @@ describe('PropTypes', () => {
     `);
 
     // carPropTypes stays untouched.
-    assert.equal(carPropTypes.make, undefined);
+    expect(carPropTypes.make).to.be.undefined;
 
     // Inherited from Car
-    assert.equal(carWithMakePropTypes.year, PropTypes.number.isRequired);
-    assert.equal(carWithMakePropTypes.model, PropTypes.string.isRequired);
+    expect(carWithMakePropTypes.year).to.equal(PropTypes.number.isRequired);
+    expect(carWithMakePropTypes.model).to.equal(PropTypes.string.isRequired);
 
     // Additional field
-    assert.equal(carWithMakePropTypes.make, PropTypes.string.isRequired);
+    expect(carWithMakePropTypes.make).to.equal(PropTypes.string.isRequired);
   });
 
 
@@ -303,9 +332,9 @@ describe('PropTypes', () => {
 
     class Message {}
 
-    assert.throws(() => {
+    expect(() => {
       parser(`{ message: Message }`);
-    }, /Message/i);
+    }).to.throw(/Message/i);
 
     parser.addType('Message', Message);
 
@@ -321,9 +350,9 @@ describe('PropTypes', () => {
   it('should allow adding propTypes.', () => {
     const parser = createParser(PropTypes);
 
-    assert.throws(() => {
+    expect(() => {
       parser(`{ message: Message }`);
-    }, /Message/i);
+    }).to.throw(/Message/i);
 
     const messagePropTypes = parser(`{
       from: String!
@@ -351,7 +380,7 @@ describe('PropTypes', () => {
       date: Date!
     }`);
 
-    assert.equal(messagePropTypesWithDate.text, PropTypes.string.isRequired);
+    expect(messagePropTypesWithDate.text).to.equal(PropTypes.string.isRequired);
     testPass(messagePropTypesWithDate.date, new Date());
     testFail(messagePropTypesWithDate.date, null);
 

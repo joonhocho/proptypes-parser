@@ -1,6 +1,6 @@
 {
   "name": "proptypes-parser",
-  "version": "0.0.13",
+  "version": "0.1.0",
   "description": "PropTypes parser / generator for React and React Native components with GraphQL-like syntax.",
   "main": "lib/index.js",
   "scripts": {
@@ -14,7 +14,7 @@
     "start": "npm test",
     "test": "mocha",
     "test-watch": "mocha --watch",
-    "update-D": "npm install --save-dev babel-cli@latest babel-preset-es2015@latest babel-preset-stage-0@latest babel-register@latest chai@latest chai-as-promised@latest coveralls@latest graphql@latest mocha@latest nyc@latest",
+    "update-D": "npm install --save-dev babel-cli@latest babel-preset-es2015@latest babel-preset-stage-0@latest babel-register@latest chai@latest chai-as-promised@latest coveralls@latest mocha@latest nyc@latest",
     "watch": "npm run build-watch & npm run test-watch"
   },
   "repository": {

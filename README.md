@@ -21,8 +21,31 @@ It also allows Type Composition via named definitions and spread operator `...`.
 npm install --save proptypes-parser
 ```
 
+### Now `proptypes-parser` provides a default parser as `parsePropTypes`.
+```javascript
+import {parsePropTypes} from 'proptypes-parser';
 
-### Usage
+const propTypes = parsePropTypes(`{
+  number: Number
+  string: String!
+}`);
+
+```
+
+Also, if you like [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals),
+
+```javascript
+import {PT} from 'proptypes-parser';
+
+const propTypes = PT`{
+  number: Number
+  string: String!
+}`;
+
+```
+
+
+### Advanced Usage
 in `proptypes.js`.
 ```javascript
 import createPropTypesParser from 'proptypes-parser';

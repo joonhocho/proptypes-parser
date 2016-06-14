@@ -529,5 +529,7 @@ export default (PropTypes, extension) => {
     }
   };
 
+  parser.PT = (strings) => parser(strings.raw[0]);
+
   return parser;
 };
