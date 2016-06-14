@@ -28,11 +28,11 @@ import {parsePropTypes} from 'proptypes-parser';
 const propTypes = parsePropTypes(`{
   number: Number
   string: String!
-}`);
+}`)
 
 ```
 
-Also, if you like [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals),
+Alternatively, if you like [template literals](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals),
 
 ```javascript
 import {PT} from 'proptypes-parser';
@@ -40,7 +40,7 @@ import {PT} from 'proptypes-parser';
 const propTypes = PT`{
   number: Number
   string: String!
-}`;
+}`
 
 ```
 
@@ -53,15 +53,15 @@ import {PropTypes} from 'react';
 
 // Provide PropTypes to the parser (Required).
 // Also, provide any custom type definitions (Optional).
-export default createPropTypesParser(PropTypes, {
+const parsePropTypes = createPropTypesParser(PropTypes, {
   Message: class Message {} // To use 'Message' instance type. 
 });
+
+export default parsePropTypes;
 ```
 
 in `component.js`.
 ```javascript
-import parsePropTypes from './proptypes';
-
 const propTypes = parsePropTypes(`{
   number: Number
   string: String!
@@ -214,10 +214,7 @@ See [test](https://github.com/joonhocho/proptypes-parser/blob/master/src/test/in
 
 
 ### Production Use
-Currently, module returns a no-op function for production (`process.env.NODE_ENV === 'production'`).
-In the future, it will be nice to do more interesting things with babel and webpack via plugins (PR is welcome!).
-
-Take a look at the [source code](https://github.com/joonhocho/proptypes-parser/blob/master/src/index.js).
+Use [babel-plugin-transform-react-remove-prop-types](https://github.com/oliviertassinari/babel-plugin-transform-react-remove-prop-types) to strip propTypes from your react components.
 
 
 ### TODO
