@@ -4,7 +4,11 @@ import {PropTypes} from 'react';
 let createParser;
 if (process && process.env && process.env.NODE_ENV === 'production') {
   // No-op if production
-  createParser = () => () => ({});
+  createParser = () => {
+    const fn = () => ({});
+    fn.PT = fn;
+    return fn;
+  };
 } else {
   createParser = require('./parser.js').default;
 }
