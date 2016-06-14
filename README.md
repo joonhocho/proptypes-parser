@@ -210,7 +210,7 @@ const propTypes = parsePropTypes(`{
 ```
 
 ### Examples
-See [test](https://github.com/joonhocho/proptypes-parser/blob/master/src/test/index.js).
+See [test](https://github.com/joonhocho/proptypes-parser/blob/master/test/index.js).
 
 
 ### Production Use
