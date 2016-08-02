@@ -7,6 +7,7 @@ if (process && process.env && process.env.NODE_ENV === 'production') {
   createParser = () => {
     const fn = () => ({});
     fn.PT = fn;
+    fn.addType = () => {};
     return fn;
   };
 } else {
