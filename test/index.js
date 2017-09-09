@@ -5,16 +5,28 @@ import createParser, {
   parsePropTypes as defaultParser,
   PT as defaultPT,
 } from '../lib';
+import ReactPropTypesSecret from 'prop-types/lib/ReactPropTypesSecret';
 
 
 const log = (value) => console.log(JSON.stringify(value, null, '  '));
 
+const test = (propType, value) => {
+  return propType(
+    {value},
+    'value',
+    'Test',
+    'prop',
+    null,
+    ReactPropTypesSecret
+  );
+};
+
 const testPass = (propType, value) => {
-  expect(propType({testProp: value}, 'testProp')).to.be.null;
+  expect(test(propType, value)).to.be.null;
 };
 
 const testFail = (propType, value) => {
-  expect(propType({testProp: value}, 'testProp')).to.be.an.instanceof(Error);
+  expect(test(propType, value)).to.be.an.instanceof(Error);
 };
 
 
